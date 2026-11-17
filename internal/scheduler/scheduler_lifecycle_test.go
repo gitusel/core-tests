@@ -15,6 +15,7 @@ func (noopSMTPSender) SendBatchedNotificationsContext(context.Context, string, s
 	return nil
 }
 
+func (noopSMTPSender) IsConfigured() bool { return false }
 func (noopSMTPSender) IsSMTPConfigured() bool {
 	return false
 }
