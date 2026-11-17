@@ -45,6 +45,7 @@ describe('ChannelSMTPConfig TLS verification', () => {
       encryption: 'none',
       skip_tls_verify: true,
       enabled: false,
+      send_provider: 'smtp',
     };
     const { component } = render(ChannelSMTPConfig, {
       props: { channelId: 7, formData },

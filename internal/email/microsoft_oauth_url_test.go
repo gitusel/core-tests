@@ -42,14 +42,14 @@ func TestMicrosoftOAuthScopesRequestNoGraphOrIdentityResource(t *testing.T) {
 	scope := parsed.Query().Get("scope")
 
 	for _, want := range []string{
-		"https://outlook.office365.com/IMAP.AccessAsUser.All",
+		"https://graph.microsoft.com/Mail.ReadWrite",
 		"offline_access",
 	} {
 		if !strings.Contains(scope, want) {
 			t.Errorf("scope %q missing required %q", scope, want)
 		}
 	}
-	for _, unwanted := range []string{"openid", "profile", "graph.microsoft.com", "SMTP.Send"} {
+	for _, unwanted := range []string{"openid", "profile", "IMAP.AccessAsUser.All", "SMTP.Send"} {
 		if strings.Contains(scope, unwanted) {
 			t.Errorf("scope %q still requests %q", scope, unwanted)
 		}
@@ -58,8 +58,8 @@ func TestMicrosoftOAuthScopesRequestNoGraphOrIdentityResource(t *testing.T) {
 
 func TestProviderDefaultScopesRequestNoIdentityLookup(t *testing.T) {
 	for _, scope := range MicrosoftDefaultScopes {
-		if strings.Contains(scope, "graph.microsoft.com") || scope == "openid" || scope == "profile" || scope == "email" || strings.Contains(scope, "SMTP.Send") {
-			t.Errorf("MicrosoftDefaultScopes still requests identity/Graph scope %q", scope)
+		if scope == "openid" || scope == "profile" || scope == "email" || strings.Contains(scope, "SMTP.Send") || strings.Contains(scope, "IMAP.AccessAsUser.All") {
+			t.Errorf("MicrosoftDefaultScopes still requests identity or IMAP scope %q", scope)
 		}
 	}
 	for _, scope := range GoogleDefaultScopes {

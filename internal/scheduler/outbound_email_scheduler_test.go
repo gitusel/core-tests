@@ -19,6 +19,7 @@ func (configuredSMTPSender) SendBatchedNotificationsContext(context.Context, str
 }
 
 func (configuredSMTPSender) IsSMTPConfigured() bool { return true }
+func (configuredSMTPSender) IsConfigured() bool     { return true }
 
 // fakeReplyOutbox delivers up to `limit` of its pending rows per call and
 // records how many rows each call was offered.
