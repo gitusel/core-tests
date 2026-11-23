@@ -203,25 +203,25 @@ func TestGraphInboundDispositionCallsGraph(t *testing.T) {
 	provider := NewMicrosoftProvider("client-id", "client-secret", "tenant-id", nil)
 	provider.graphBaseURL = srv.URL
 	provider.httpClient = srv.Client()
-	client, err := provider.Connect(context.Background(), &models.ChannelConfig{
+	box, err := provider.OpenMailbox(context.Background(), &models.ChannelConfig{
 		EmailOAuthAccessToken: token,
 		EmailOAuthEmail:       mailbox,
 	})
 	if err != nil {
-		t.Fatalf("Connect: %v", err)
+		t.Fatalf("OpenMailbox: %v", err)
 	}
-	if _, err := client.SelectMailbox("INBOX"); err != nil {
-		t.Fatalf("SelectMailbox: %v", err)
+	if _, err := box.Open(context.Background(), "INBOX", false); err != nil {
+		t.Fatalf("Open: %v", err)
 	}
-	messages, err := client.FetchMessages(0, 2)
-	if err != nil || len(messages) != 1 {
-		t.Fatalf("fetch = (%d, %v)", len(messages), err)
+	deliveries, err := box.Fetch(context.Background(), 2)
+	if err != nil || len(deliveries) != 1 {
+		t.Fatalf("fetch = (%d, %v)", len(deliveries), err)
 	}
-	if err := client.MarkAsRead(messages[0].UID); err != nil {
-		t.Fatalf("MarkAsRead: %v", err)
+	if err := box.MarkRead(context.Background(), deliveries[0].Ref); err != nil {
+		t.Fatalf("MarkRead: %v", err)
 	}
-	if err := client.DeleteMessage(messages[0].UID); err != nil {
-		t.Fatalf("DeleteMessage: %v", err)
+	if err := box.Delete(context.Background(), deliveries[0].Ref); err != nil {
+		t.Fatalf("Delete: %v", err)
 	}
 	joined := strings.Join(calls, "\n")
 	for _, want := range []string{

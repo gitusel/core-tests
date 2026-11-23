@@ -7,45 +7,52 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/emersion/go-imap/v2"
-
 	"windshift/internal/blobstore"
 	"windshift/internal/email"
+	"windshift/internal/mailbox"
+	"windshift/internal/mailmsg"
 	"windshift/internal/models"
 	"windshift/internal/services"
 	"windshift/internal/sso"
 	"windshift/internal/testutils"
 )
 
-// deltaRecordClient records the cursor used for each folder fetch. Selecting a
-// different folder drops the in-memory cursor, matching the Graph mailbox.
+// deltaRecordClient is a Graph-shaped Mailbox double: a cursor per folder, no
+// UID space. Selecting a different folder drops the in-memory cursor, matching
+// the real Graph mailbox.
 type deltaRecordClient struct {
-	folder  string
-	cursor  string
-	fetches []string
-	fail    bool
-	advance string
+	folder    string
+	cursor    string
+	committed string
+	fetches   []string
+	fail      bool
+	advance   string
 }
 
-func (c *deltaRecordClient) SelectMailbox(name string) (*imap.SelectData, error) {
+func (c *deltaRecordClient) Open(_ context.Context, name string, _ bool) (mailbox.Info, error) {
 	if c.folder != "" && c.folder != name {
 		c.cursor = ""
+		c.committed = ""
 	}
 	c.folder = name
-	return &imap.SelectData{UIDValidity: 1, UIDNext: 1}, nil
+	return mailbox.Info{}, nil
 }
-func (c *deltaRecordClient) RestoreGraphDelta(link string) { c.cursor = link }
-func (c *deltaRecordClient) GraphDelta() string            { return c.cursor }
-func (c *deltaRecordClient) FetchMessages(uint32, int) ([]*email.FetchedMessage, error) {
+func (c *deltaRecordClient) Restore(link string) { c.cursor = link; c.committed = link }
+func (c *deltaRecordClient) Checkpoint() string  { return c.committed }
+func (c *deltaRecordClient) Acknowledge()        { c.committed = c.cursor }
+func (c *deltaRecordClient) Fetch(_ context.Context, _ int) ([]mailbox.Delivery, error) {
 	c.fetches = append(c.fetches, c.folder+"|"+c.cursor)
 	if c.fail {
 		if c.advance != "" {
 			c.cursor = c.advance
 		}
-		return []*email.FetchedMessage{{
-			UID: 1,
-			Raw: []byte("From: customer@example.com\r\nSubject: fail\r\nMessage-ID: <fail@example.com>\r\n\r\nbody\r\n"),
-			FetchError: errDeltaFetch,
+		return []mailbox.Delivery{{
+			Ref: "graph-fail",
+			Message: &mailmsg.Message{
+				Ref:        "graph-fail",
+				Raw:        []byte("From: customer@example.com\r\nSubject: fail\r\nMessage-ID: <fail@example.com>\r\n\r\nbody\r\n"),
+				FetchError: errDeltaFetch,
+			},
 		}}, nil
 	}
 	if c.advance != "" {
@@ -55,10 +62,10 @@ func (c *deltaRecordClient) FetchMessages(uint32, int) ([]*email.FetchedMessage,
 	}
 	return nil, nil
 }
-func (c *deltaRecordClient) MarkAsRead(uint32) error   { return nil }
-func (c *deltaRecordClient) DeleteMessage(uint32) error { return nil }
-func (c *deltaRecordClient) Expunge() error             { return nil }
-func (c *deltaRecordClient) Close() error               { return nil }
+func (c *deltaRecordClient) MarkRead(context.Context, string) error { return nil }
+func (c *deltaRecordClient) Delete(context.Context, string) error   { return nil }
+func (c *deltaRecordClient) Expunge(context.Context) error          { return nil }
+func (c *deltaRecordClient) Close() error                           { return nil }
 
 type errString string
 
@@ -66,16 +73,20 @@ func (e errString) Error() string { return string(e) }
 
 const errDeltaFetch errString = "fetch failed"
 
-type staticProvider struct{ client email.IMAPClient }
+// staticProvider hands back a native Mailbox, so no IMAP client is involved.
+type staticProvider struct{ box mailbox.Mailbox }
 
-func (p *staticProvider) GetType() string { return "microsoft" }
+func (p *staticProvider) GetType() string { return "graph" }
 func (p *staticProvider) GetIMAPServer(*models.ChannelConfig) (string, int) {
 	return "", 0
 }
 func (p *staticProvider) Connect(context.Context, *models.ChannelConfig) (email.IMAPClient, error) {
-	return p.client, nil
+	return nil, errDeltaFetch
 }
 func (p *staticProvider) TestConnection(context.Context, *models.ChannelConfig) error { return nil }
+func (p *staticProvider) OpenMailbox(context.Context, *models.ChannelConfig) (mailbox.Mailbox, error) {
+	return p.box, nil
+}
 
 func TestGraphDeltaCursorPerIntakeAcrossTicks(t *testing.T) {
 	tdb := testutils.CreateTestDB(t, true)
@@ -115,7 +126,7 @@ func TestGraphDeltaCursorPerIntakeAcrossTicks(t *testing.T) {
 	es.providerForChannel = func(context.Context, int) (email.Provider, *models.ChannelConfig, error) {
 		client := &deltaRecordClient{}
 		clients = append(clients, client)
-		return &staticProvider{client: client}, &models.ChannelConfig{}, nil
+		return &staticProvider{box: client}, &models.ChannelConfig{}, nil
 	}
 
 	if ok := es.processChannel(ctx, channelInfo{ID: channelID, Name: "Graph mailbox"}); !ok {
@@ -175,7 +186,7 @@ func TestGraphDeltaCursorRetriesOriginalLinkAfterFailedTick(t *testing.T) {
 	es.providerForChannel = func(context.Context, int) (email.Provider, *models.ChannelConfig, error) {
 		client := &deltaRecordClient{fail: len(clients) == 0, advance: "should-not-stick"}
 		clients = append(clients, client)
-		return &staticProvider{client: client}, &models.ChannelConfig{}, nil
+		return &staticProvider{box: client}, &models.ChannelConfig{}, nil
 	}
 	if ok := es.processChannel(ctx, channelInfo{ID: channelID, Name: "Graph mailbox"}); ok {
 		t.Fatal("failed tick reported success")
