@@ -4,10 +4,12 @@ package graph
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/mail"
 	"net/url"
 	"strings"
 	"testing"
@@ -17,8 +19,14 @@ import (
 )
 
 // TestGraphOutboundSendMail posts a threaded reply to an in-process Graph
-// server: client-credentials token, sendMail path, replyTo as a recipient
-// array, and no internetMessageHeaders.
+// server: client-credentials token, sendMail path, and the message as
+// base64-encoded RFC 5322 MIME.
+//
+// MIME, not the JSON message shape, because a threaded reply has to carry
+// Message-ID, In-Reply-To, References, and Reply-To. Graph's JSON sendMail
+// cannot express Message-ID or In-Reply-To at all: internetMessageHeaders
+// rejects any name that does not start with "x-". Sending JSON would therefore
+// deliver the mail but silently drop the threading the caller asked for.
 func TestGraphOutboundSendMail(t *testing.T) {
 	const (
 		tenant = "tenant-id"
@@ -28,8 +36,8 @@ func TestGraphOutboundSendMail(t *testing.T) {
 		token  = "graph-access-token"
 	)
 	var tokenForm url.Values
-	var sendPath, auth string
-	var payload map[string]any
+	var sendPath, auth, contentType string
+	var rawMessage []byte
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.URL.Path == "/token":
@@ -46,13 +54,16 @@ func TestGraphOutboundSendMail(t *testing.T) {
 		case strings.HasSuffix(r.URL.Path, "/sendMail"):
 			sendPath = r.URL.Path
 			auth = r.Header.Get("Authorization")
+			contentType = r.Header.Get("Content-Type")
 			body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
 			if err != nil {
 				t.Errorf("read sendMail: %v", err)
 			}
-			if err := json.Unmarshal(body, &payload); err != nil {
-				t.Errorf("decode sendMail: %v", err)
+			decoded, err := base64.StdEncoding.DecodeString(string(body))
+			if err != nil {
+				t.Errorf("decode sendMail body as base64 MIME: %v", err)
 			}
+			rawMessage = decoded
 			w.WriteHeader(http.StatusAccepted)
 		default:
 			http.NotFound(w, r)
@@ -80,7 +91,8 @@ func TestGraphOutboundSendMail(t *testing.T) {
 		HTMLBody:     "<p>hi</p>",
 		TextBody:     "hi",
 		MessageID:    "<msg@windshift>",
-		References:   []string{"<orig@windshift>"},
+		InReplyTo:    "<orig@windshift>",
+		References:   []string{"<root@windshift>", "<orig@windshift>"},
 	})
 	if err != nil {
 		t.Fatalf("send threaded mail: %v", err)
@@ -91,24 +103,42 @@ func TestGraphOutboundSendMail(t *testing.T) {
 	if auth != "Bearer "+token {
 		t.Fatalf("authorization = %q", auth)
 	}
+	if contentType != "text/plain" {
+		t.Fatalf("sendMail content type = %q, want text/plain (base64 MIME)", contentType)
+	}
 	wantPath := "/users/" + url.PathEscape(from) + "/sendMail"
 	if sendPath != wantPath {
 		t.Fatalf("send path = %q, want %q", sendPath, wantPath)
 	}
-	msg, _ := payload["message"].(map[string]any)
-	if msg == nil {
-		t.Fatalf("payload = %#v", payload)
+	if len(rawMessage) == 0 {
+		t.Fatal("sendMail body was not base64 MIME")
 	}
-	if _, ok := msg["internetMessageHeaders"]; ok {
-		t.Fatalf("internetMessageHeaders present: %#v", msg["internetMessageHeaders"])
+
+	msg, err := mail.ReadMessage(strings.NewReader(string(rawMessage)))
+	if err != nil {
+		t.Fatalf("parse sent MIME: %v", err)
 	}
-	replyTo, ok := msg["replyTo"].([]any)
-	if !ok || len(replyTo) != 1 {
-		t.Fatalf("replyTo = %#v, want a one-element array", msg["replyTo"])
+	if got, want := msg.Header.Get("To"), "customer@example.com"; !strings.Contains(got, want) {
+		t.Fatalf("To = %q, want it to contain %q", got, want)
 	}
-	recip, _ := replyTo[0].(map[string]any)
-	addr, _ := recip["emailAddress"].(map[string]any)
-	if addr["address"] != "reply@windshift.example" || addr["name"] != "Replies" {
-		t.Fatalf("replyTo address = %#v", addr)
+	// The threading headers are the whole point of using MIME here.
+	if got := msg.Header.Get("Message-ID"); got != "<msg@windshift>" {
+		t.Fatalf("Message-ID = %q, want <msg@windshift>", got)
+	}
+	if got := msg.Header.Get("In-Reply-To"); got != "<orig@windshift>" {
+		t.Fatalf("In-Reply-To = %q, want <orig@windshift>", got)
+	}
+	references := msg.Header.Get("References")
+	for _, want := range []string{"<root@windshift>", "<orig@windshift>"} {
+		if !strings.Contains(references, want) {
+			t.Fatalf("References = %q, missing %q", references, want)
+		}
+	}
+	replyTo, err := msg.Header.AddressList("Reply-To")
+	if err != nil || len(replyTo) != 1 {
+		t.Fatalf("Reply-To = %q (%v), want one address", msg.Header.Get("Reply-To"), err)
+	}
+	if replyTo[0].Address != "reply@windshift.example" || replyTo[0].Name != "Replies" {
+		t.Fatalf("Reply-To address = %#v", replyTo[0])
 	}
 }
