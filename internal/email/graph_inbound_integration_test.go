@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"windshift/internal/blobstore"
+	"windshift/internal/graph"
 	"windshift/internal/models"
 	"windshift/internal/services"
 )
@@ -70,7 +71,7 @@ func TestGraphInboundFolderDeltaAndIntake(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 
-	box, err := OpenGraphMailbox(context.Background(), GraphMailboxConfig{
+	box, err := graph.OpenGraphMailbox(context.Background(), graph.GraphMailboxConfig{
 		BaseURL:    srv.URL,
 		Token:      token,
 		Mailbox:    mailbox,
@@ -86,7 +87,7 @@ func TestGraphInboundFolderDeltaAndIntake(t *testing.T) {
 		t.Fatalf("SelectFolder called Graph: %s", strings.Join(calls, "\n"))
 	}
 
-	messages, cursor, err := box.Poll(context.Background(), GraphMailboxCursor{}, 2)
+	messages, cursor, err := box.PollMessages(context.Background(), graph.GraphMailboxCursor{}, 2)
 	if err != nil {
 		t.Fatalf("first poll: %v", err)
 	}
@@ -113,7 +114,7 @@ func TestGraphInboundFolderDeltaAndIntake(t *testing.T) {
 	config := &models.ChannelConfig{EmailWorkspaceID: workspaceID, EmailItemTypeID: &itemTypeID}
 	var firstID *int
 	for i, msg := range messages {
-		parsed := NewParser().Parse(msg)
+		parsed := NewParser().ParseMessage(msg)
 		created, err := processor.ProcessEmail(context.Background(), parsed, channelID, 1, config)
 		if err != nil {
 			t.Fatalf("process %d: %v", i, err)
@@ -139,13 +140,13 @@ func TestGraphInboundFolderDeltaAndIntake(t *testing.T) {
 	if items != 3 {
 		t.Fatalf("items = %d, want 3", items)
 	}
-	again, err := processor.ProcessEmail(context.Background(), NewParser().Parse(messages[0]), channelID, 1, config)
+	again, err := processor.ProcessEmail(context.Background(), NewParser().ParseMessage(messages[0]), channelID, 1, config)
 	if err != nil || again.Action != ActionAlreadyExists {
 		t.Fatalf("duplicate = (%#v, %v)", again, err)
 	}
 
 	beforeSecond := len(calls)
-	second, next, err := box.Poll(context.Background(), cursor, 2)
+	second, next, err := box.PollMessages(context.Background(), cursor, 2)
 	if err != nil {
 		t.Fatalf("second poll: %v", err)
 	}
