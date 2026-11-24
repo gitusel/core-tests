@@ -35,16 +35,31 @@ func TestDatabase_Initialize_FreshDatabase(t *testing.T) {
 	// Verify foreign key constraints are enabled
 	tdb.AssertForeignKeyEnabled(t)
 
-	// Verify core indexes exist
+	// Verify core indexes exist. idx_users_email and idx_system_settings_key
+	// are gone on purpose (20261202_drop_unique_covered_indexes): their
+	// UNIQUE column constraints back equivalent indexes.
 	coreIndexes := []string{
 		"idx_items_workspace_id",
-		"idx_users_email",
-		"idx_system_settings_key",
 		"idx_statuses_category_id",
 	}
 
 	for _, index := range coreIndexes {
 		tdb.AssertIndexExists(t, index)
+	}
+
+	// The dropped explicit indexes only duplicated table constraints, so the
+	// uniqueness contract they stood in for must still hold.
+	if _, err := tdb.Exec("INSERT INTO users (email, username, first_name, last_name) VALUES ('dup@example.test', 'dup-user', 'A', 'B')"); err != nil {
+		t.Fatalf("seed user: %v", err)
+	}
+	if _, err := tdb.Exec("INSERT INTO users (email, username, first_name, last_name) VALUES ('dup@example.test', 'dup-user-2', 'A', 'B')"); err == nil {
+		t.Fatal("duplicate users.email accepted; uniqueness is no longer enforced")
+	}
+	if _, err := tdb.Exec("INSERT INTO system_settings (key, value) VALUES ('dup_key', 'a')"); err != nil {
+		t.Fatalf("seed setting: %v", err)
+	}
+	if _, err := tdb.Exec("INSERT INTO system_settings (key, value) VALUES ('dup_key', 'b')"); err == nil {
+		t.Fatal("duplicate system_settings.key accepted; uniqueness is no longer enforced")
 	}
 }
 

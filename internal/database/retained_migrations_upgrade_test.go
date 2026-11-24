@@ -504,7 +504,6 @@ func TestCompactCatalogContainsExactlyRetainedMigrations(t *testing.T) {
 		"20261016_email_outbox_reply_to",
 		"20261018_intake_split",
 		"20261026_intake_workspace_portal",
-		"20261117_intake_graph_delta",
 		"20261027_intake_send_confirmation",
 		"20261019_email_tracking_completed_at",
 		"20261020_email_tracking_completed_backfill",
@@ -553,6 +552,14 @@ func TestCompactCatalogContainsExactlyRetainedMigrations(t *testing.T) {
 		"20261125_session_remember_me",
 		"20261126_board_publication_governance",
 		"20261126_board_portal_placements",
+		"20261127_time_project_currency",
+		"20261127_domain_event_claimable_index",
+		"20261128_items_active_list_indexes",
+		"20261129_items_workspace_activity_index",
+		"20261130_screen_field_placement",
+		"20261117_intake_graph_delta",
+		"20261201_drop_redundant_item_key_indexes",
+		"20261202_drop_unique_covered_indexes",
 	}
 	if len(database.Catalog) != len(want) {
 		t.Fatalf("catalog length = %d, want %d", len(database.Catalog), len(want))
