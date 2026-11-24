@@ -253,23 +253,36 @@ test('saving a category blocks set changes and duplicate submission until refres
   });
 });
 
-test('saving the set form toggles portal access for administrators', async () => {
+test('the permissions tab toggles portal access for administrators', async () => {
   assetSets.getPortalAccess.mockResolvedValue(null);
   render(AssetManager);
   await screen.findByText('Type 1');
 
-  await fireEvent.click(screen.getByTestId('asset-manager-set-actions'));
-  await fireEvent.click(await screen.findByTestId('asset-manager-edit-set'));
+  await fireEvent.click(screen.getByTestId('asset-manager-permissions-tab'));
+  const portalToggle = await screen.findByTestId('asset-set-portal-access');
+  await waitFor(() => expect(assetSets.getPortalAccess).toHaveBeenCalledWith(1));
+  expect(portalToggle).toHaveAttribute('aria-checked', 'false');
+
+  await fireEvent.click(portalToggle);
+  await waitFor(() => expect(assetSets.setPortalAccess).toHaveBeenCalledWith(1, true));
+  expect(portalToggle).toHaveAttribute('aria-checked', 'true');
+  // The set form no longer carries portal exposure.
+  expect(assetSets.update).not.toHaveBeenCalled();
+});
+
+test('a failed portal access save reverts the toggle and keeps the set form untouched', async () => {
+  assetSets.getPortalAccess.mockResolvedValue(null);
+  assetSets.setPortalAccess.mockRejectedValue(new Error('denied'));
+  render(AssetManager);
+  await screen.findByText('Type 1');
+
+  await fireEvent.click(screen.getByTestId('asset-manager-permissions-tab'));
+  const portalToggle = await screen.findByTestId('asset-set-portal-access');
   await waitFor(() => expect(assetSets.getPortalAccess).toHaveBeenCalledWith(1));
 
-  const portalToggle = screen.getByTestId('asset-set-portal-access');
-  const checkbox = portalToggle.querySelector('input');
-  expect(checkbox).not.toBeChecked();
-  await fireEvent.click(checkbox);
-  await fireEvent.click(screen.getByTestId('dialog-confirm'));
-
-  await waitFor(() => expect(assetSets.setPortalAccess).toHaveBeenCalledWith(1, true));
-  expect(assetSets.update).toHaveBeenCalledTimes(1);
+  await fireEvent.click(portalToggle);
+  await waitFor(() => expect(portalToggle).toHaveAttribute('aria-checked', 'false'));
+  expect(assetSets.update).not.toHaveBeenCalled();
 });
 
 test('editing a category patches only name/description and moves on parent change', async () => {
