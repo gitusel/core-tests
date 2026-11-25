@@ -153,7 +153,7 @@ describe('date field', () => {
     // formatCustomFieldDate forces UTC parsing — Jan 15 stays Jan 15 even
     // when the host runs in a non-UTC zone.
     renderReadonly({
-      field: { field_type: 'date', name: 'Due' },
+      field: { id: 12, field_type: 'date', name: 'Due' },
       value: '2026-01-15',
     });
     // Locale rendering is host-dependent (e.g. en-US "Jan 15, 2026");
@@ -165,7 +165,7 @@ describe('date field', () => {
 
   test('empty value shows setField placeholder', () => {
     renderReadonly({
-      field: { field_type: 'date', name: 'Due' },
+      field: { id: 12, field_type: 'date', name: 'Due' },
       value: null,
     });
     expect(screen.getByText('setField:due')).toBeInTheDocument();
@@ -745,7 +745,6 @@ describe('edit mode — scalar inputs', () => {
     ['text', 'input[type="text"]', 'Changed text'],
     ['textarea', 'textarea', 'Changed\ntext'],
     ['number', 'input[type="number"]', '42.5'],
-    ['date', 'input[type="date"]', '2026-05-15'],
     ['email', 'input[type="email"]', 'new@example.com'],
     ['url', 'input[type="url"]', 'https://example.com/new'],
   ])('%s calls onChange with edited value', async (fieldType, selector, editedValue) => {
@@ -761,6 +760,24 @@ describe('edit mode — scalar inputs', () => {
     await fireEvent.input(input, { target: { value: editedValue } });
 
     expect(onChange).toHaveBeenCalledWith(editedValue);
+  });
+
+  test('date calls onChange with the picked calendar day', async () => {
+    const onChange = vi.fn();
+    renderEdit({
+      field: { id: 12, field_type: 'date', name: 'Due' },
+      value: '2026-05-01',
+      onChange,
+    });
+
+    // A date field is the shared DatePicker: the value opens as a calendar and
+    // picking a day commits the whole date-only string.
+    const trigger = screen.getByRole('combobox');
+    await fireEvent.click(trigger);
+    const day = await screen.findByTestId('custom-field-input-12-calendar-day-2026-05-15');
+    await fireEvent.click(day);
+
+    expect(onChange).toHaveBeenCalledWith('2026-05-15');
   });
 
   test('text input commits on Enter instead of committing each character', async () => {
@@ -816,7 +833,7 @@ describe('edit mode — scalar inputs', () => {
 
   test('date input strips time-like persisted values to YYYY-MM-DD', () => {
     const { container } = renderEdit({
-      field: { field_type: 'date', name: 'Due' },
+      field: { id: 12, field_type: 'date', name: 'Due' },
       value: '2026-05-15T12:34:56Z',
     });
 

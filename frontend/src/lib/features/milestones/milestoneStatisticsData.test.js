@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('../../api/milestones.js', () => ({
+vi.mock('../../api/planning.js', () => ({
   milestones: { getTestStatisticsMany: vi.fn(), getTestStatistics: vi.fn() },
   milestoneCategories: { getAll: vi.fn().mockResolvedValue([]) },
 }));
 
-import { milestones } from '../../api/milestones.js';
+import { milestones } from '../../api/planning.js';
 import { loadMilestoneTestStatistics } from './milestoneStatisticsData.js';
 
 describe('milestone test-statistics request graph', () => {

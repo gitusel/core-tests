@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -44,11 +45,14 @@ func TestReadinessHealthy(t *testing.T) {
 func TestReadinessAttachmentUnavailable(t *testing.T) {
 	h := NewHandler(fakeDB{}, &fakeAttachment{enabled: true, err: errors.New("bucket down")})
 	rec, body := ready(h)
-	if rec.Code != http.StatusServiceUnavailable {
-		t.Fatalf("status = %d, want 503", rec.Code)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; unreachable attachments must not fail readiness", rec.Code)
 	}
-	if body.Attachments != "unavailable" {
-		t.Fatalf("attachments = %q, want unavailable", body.Attachments)
+	if body.Status != "degraded" || body.Database != "ok" || body.Attachments != "degraded" {
+		t.Fatalf("body = %+v, want status/database ok and attachments degraded", body)
+	}
+	if strings.Contains(rec.Body.String(), "bucket down") {
+		t.Fatal("readiness response leaked the attachment error")
 	}
 }
 
@@ -81,8 +85,8 @@ func TestSetAttachmentProbe(t *testing.T) {
 		t.Fatalf("before set: status=%d body=%+v", rec.Code, body)
 	}
 	h.SetAttachmentProbe(&fakeAttachment{enabled: true, err: errors.New("down")})
-	if rec, body := ready(h); rec.Code != http.StatusServiceUnavailable || body.Attachments != "unavailable" {
-		t.Fatalf("after set: status=%d body=%+v", rec.Code, body)
+	if rec, body := ready(h); rec.Code != http.StatusOK || body.Status != "degraded" || body.Attachments != "degraded" {
+		t.Fatalf("after set: status=%d body=%+v, want 200 with degraded attachments", rec.Code, body)
 	}
 }
 

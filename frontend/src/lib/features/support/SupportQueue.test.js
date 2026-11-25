@@ -364,7 +364,13 @@ describe('SupportQueue list-shaped view', () => {
     render(SupportQueue, { props: { workspaceId: 1, collectionId: 5 } });
     await screen.findByTestId('support-queue-tab-unassigned');
 
-    await waitFor(() => expect(mocks.getBoardConfiguration).toHaveBeenCalledWith(5, 1));
+    await waitFor(() =>
+      expect(mocks.getBoardConfiguration).toHaveBeenCalledWith(
+        5,
+        1,
+        expect.objectContaining({ signal: expect.any(AbortSignal) }),
+      ),
+    );
 
     await fireEvent.click(screen.getByTestId('queue-column-selector-trigger'));
     await fireEvent.click(await screen.findByTestId('add-column-assignee'));
@@ -391,7 +397,11 @@ describe('SupportQueue list-shaped view', () => {
     render(SupportQueue, { props: { workspaceId: 1 } });
     await screen.findByTestId('support-queue-row-11');
 
-    expect(mocks.getBoardConfiguration).toHaveBeenCalledWith(null, 1);
+    expect(mocks.getBoardConfiguration).toHaveBeenCalledWith(
+      null,
+      1,
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
     expect(screen.getByText('supportQueue.columnOwner')).toBeInTheDocument();
     expect(screen.getByText('supportQueue.columnUpdated')).toBeInTheDocument();
     expect(screen.queryByText('Created')).toBeNull();
@@ -404,12 +414,19 @@ describe('SupportQueue list-shaped view', () => {
     fireEvent.change(checkbox, { target: { checked: true } });
     await waitFor(() => expect(screen.getByTestId('support-queue-bulk-bar')).toBeVisible());
 
+    // Only the post-bulk reload may add a queue read.
+    const queueReads = mocks.fetchV2Data.mock.calls.length;
+
     fireEvent.click(screen.getByTestId('support-queue-bulk-assign-me'));
 
     await waitFor(() => expect(mocks.bulkUpdate).toHaveBeenCalledTimes(1));
     expect(mocks.bulkUpdate).toHaveBeenCalledWith([11], { assignee_id: 7 });
     await waitFor(() =>
-      expect(mocks.fetchV2Data).toHaveBeenCalledWith(expect.stringContaining('/queues')),
+      expect(mocks.fetchV2Data.mock.calls.length).toBeGreaterThan(queueReads)
+    );
+    expect(mocks.fetchV2Data).toHaveBeenLastCalledWith(
+      '/workspaces/SQA/queues',
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
   });
 
@@ -450,12 +467,18 @@ describe('SupportQueue list-shaped view', () => {
         return option;
       })
     );
+    // Only the post-bulk reload may add a queue read.
+    const queueReads = mocks.fetchV2Data.mock.calls.length;
     await fireEvent.click(screen.getByTestId('support-queue-bulk-status-apply'));
 
     await waitFor(() => expect(mocks.bulkTransition).toHaveBeenCalledTimes(1));
     expect(mocks.bulkTransition).toHaveBeenCalledWith([11], 2);
     await waitFor(() =>
-      expect(mocks.fetchV2Data).toHaveBeenCalledWith(expect.stringContaining('/queues')),
+      expect(mocks.fetchV2Data.mock.calls.length).toBeGreaterThan(queueReads)
+    );
+    expect(mocks.fetchV2Data).toHaveBeenLastCalledWith(
+      '/workspaces/SQA/queues',
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
   });
 
@@ -466,13 +489,20 @@ describe('SupportQueue list-shaped view', () => {
     fireEvent.change(checkbox, { target: { checked: true } });
     await waitFor(() => expect(screen.getByTestId('support-queue-bulk-bar')).toBeVisible());
 
+    // Only the post-delete reload may add a queue read.
+    const queueReads = mocks.fetchV2Data.mock.calls.length;
+
     await fireEvent.click(screen.getByTestId('support-queue-bulk-delete'));
 
     await waitFor(() => expect(mocks.confirm).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(mocks.bulkDelete).toHaveBeenCalledTimes(1));
     expect(mocks.bulkDelete).toHaveBeenCalledWith([11]);
     await waitFor(() =>
-      expect(mocks.fetchV2Data).toHaveBeenCalledWith(expect.stringContaining('/queues')),
+      expect(mocks.fetchV2Data.mock.calls.length).toBeGreaterThan(queueReads)
+    );
+    expect(mocks.fetchV2Data).toHaveBeenLastCalledWith(
+      '/workspaces/SQA/queues',
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
   });
 
@@ -513,8 +543,8 @@ describe('SupportQueue list-shaped view', () => {
 
     await waitFor(() => expect(screen.queryByTestId('support-queue-row-11')).toBeNull());
     expect(screen.getByTestId('support-queue-row-12')).toBeVisible();
-    expect(mocks.getAll).toHaveBeenLastCalledWith(
-      expect.objectContaining({ search: 'attachment', page: 1 })
+    expect(mocks.getAll.mock.calls.at(-1)[0]).toEqual(
+      expect.objectContaining({ search: 'attachment', page: 1 }),
     );
   });
 
@@ -537,8 +567,8 @@ describe('SupportQueue list-shaped view', () => {
 
     await waitFor(() => expect(screen.getByTestId('support-queue-row-200')).toBeVisible());
     expect(screen.queryByTestId('support-queue-row-100')).toBeNull();
-    expect(mocks.getAll).toHaveBeenLastCalledWith(
-      expect.objectContaining({ page: 2, limit: 2 })
+    expect(mocks.getAll.mock.calls.at(-1)[0]).toEqual(
+      expect.objectContaining({ page: 2, limit: 2 }),
     );
   });
 
@@ -652,7 +682,10 @@ describe('SupportQueue list-shaped view', () => {
     render(SupportQueue, { props: { workspaceId: 1, collectionId: 5 } });
 
     await waitFor(() =>
-      expect(mocks.fetchV2Data).toHaveBeenCalledWith('/collections/5/queues'),
+      expect(mocks.fetchV2Data).toHaveBeenCalledWith(
+        '/collections/5/queues',
+        expect.objectContaining({ signal: expect.any(AbortSignal) }),
+      ),
     );
     await waitFor(() => expect(screen.getByTestId('support-queue-add')).toBeInTheDocument());
   });

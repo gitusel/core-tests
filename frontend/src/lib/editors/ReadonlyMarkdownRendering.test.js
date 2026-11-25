@@ -81,7 +81,9 @@ describe("readonly Milkdown rendering", () => {
       props: { content: MARKDOWN, readonly: true, showToolbar: false },
     });
 
-    expect(container.querySelector('.animate-pulse')).not.toBeNull();
+    // The lazy wrapper shows the shared loading state until the editor module
+    // resolves, never the editor itself.
+    expect(container.querySelector('[data-testid="milkdown-loading"]')).not.toBeNull();
     expect(container.querySelector('.ProseMirror')).toBeNull();
   });
 });

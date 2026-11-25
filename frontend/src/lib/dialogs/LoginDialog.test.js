@@ -63,6 +63,7 @@ vi.mock('../api/admin.js', () => ({
 vi.mock('../router.js', () => ({ navigate: vi.fn() }));
 vi.mock('../utils/webauthn-utils.js', () => ({
   isWebAuthnSupported: vi.fn().mockReturnValue(false),
+  isConditionalMediationAvailable: vi.fn().mockResolvedValue(false),
 }));
 vi.mock('../utils/loginUtils.js', () => ({
   deriveFidoError: vi.fn(),
@@ -142,7 +143,7 @@ describe('LoginDialog SSO remember-me', () => {
     expect(
       rememberMe.compareDocumentPosition(ssoButton) & Node.DOCUMENT_POSITION_FOLLOWING
     ).toBeTruthy();
-    await waitFor(() => expect(screen.getByText('Password login is disabled')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('auth.passwordDisabled')).toBeInTheDocument());
 
     await fireEvent.click(rememberMe);
     await fireEvent.click(ssoButton);

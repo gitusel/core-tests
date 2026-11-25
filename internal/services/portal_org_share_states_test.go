@@ -122,9 +122,9 @@ func TestPortalOrgShareDeletedRequest(t *testing.T) {
 	if sees() {
 		t.Fatalf("deleted ticket must not appear in the portal list")
 	}
-	ok, err := service.VerifyRequestOwnership(ctx, ticket, portalChannelID, nil, &colleague)
+	ok, err := service.VerifyRequestEngagement(ctx, ticket, portalChannelID, nil, &colleague)
 	if err != nil {
-		t.Fatalf("VerifyRequestOwnership: %v", err)
+		t.Fatalf("VerifyRequestEngagement: %v", err)
 	}
 	if ok {
 		t.Fatalf("deleted ticket must not be readable by direct id")

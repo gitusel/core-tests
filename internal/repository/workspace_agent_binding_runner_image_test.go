@@ -22,7 +22,7 @@ func TestWorkspaceAgentBindingRepository_RunnerImageRoundTrip(t *testing.T) {
 		TargetPoolID:    &poolID,
 		RunnerImage:     "ghcr.io/acme/playwright:1",
 		TokenScopes:     []string{"items:read"},
-		CreatedByUserID: admin,
+		CreatedByUserID: intPtr(admin),
 	})
 	if err != nil {
 		t.Fatalf("insert with image: %v", err)
@@ -40,7 +40,7 @@ func TestWorkspaceAgentBindingRepository_RunnerImageRoundTrip(t *testing.T) {
 		ActingUserID:    agentB,
 		ActingUserKind:  "agent",
 		TokenScopes:     []string{"items:read"},
-		CreatedByUserID: admin,
+		CreatedByUserID: intPtr(admin),
 	})
 	if err != nil {
 		t.Fatalf("insert without image: %v", err)

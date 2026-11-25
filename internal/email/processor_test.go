@@ -264,6 +264,27 @@ func newTestReplyEmail(messageID, inReplyTo, body string) *email.ParsedEmail {
 	return e
 }
 
+// issueReplyKey records a recipient-bound outbound reply key for the item, the
+// way EmailReplyService does when it sends a notice or a comment reply. A reply
+// is authorized only by such a key naming the sender: thread history, a
+// customer-generated Message-ID, and a pre-upgrade key (WI-2365) never are.
+func issueReplyKey(t *testing.T, env *processorTestEnv, itemID int, recipient string) string {
+	t.Helper()
+	keyID := fmt.Sprintf("<ws-notice-%d-%d@example.com>", itemID, time.Now().UnixNano())
+	if _, err := env.db.ExecWrite(`
+		INSERT INTO email_reply_outbox
+			(kind, channel_id, item_id, to_email, subject, html_body, text_body,
+			 message_id, key_generation, from_email)
+		VALUES ('notice', ?, ?, ?, 'Your request', '', '', ?, 1, 'support@example.com')
+	`, env.channelID, itemID, recipient, keyID); err != nil {
+		t.Fatalf("issue reply key for item %d: %v", itemID, err)
+	}
+	if _, err := env.db.ExecWrite(`UPDATE items SET reply_key_issued_at = CURRENT_TIMESTAMP WHERE id = ?`, itemID); err != nil {
+		t.Fatalf("mark reply key issued for item %d: %v", itemID, err)
+	}
+	return keyID
+}
+
 func TestProcessor_NewItem_StripsSignature(t *testing.T) {
 	env := setupProcessorTestEnv(t, false)
 	ctx := context.Background()
@@ -305,10 +326,12 @@ func TestProcessor_Reply_StripsQuotesAndSignature(t *testing.T) {
 		t.Fatalf("Failed to create original item: %v", err)
 	}
 
-	// Now process a reply with both quoted text and signature
+	// Now process a reply with both quoted text and signature. The reply is
+	// authorized by the recipient-bound key sent with the original notice.
+	keyID := issueReplyKey(t, env, *origResult.ItemID, "sender@example.com")
 	reply := newTestReplyEmail(
 		"<reply-1@example.com>",
-		"<original-1@example.com>",
+		keyID,
 		"Here is the fix.\n\n> I need help.\n\nThanks,\nBob\nbob@co.com",
 	)
 
@@ -345,17 +368,25 @@ func TestProcessor_ReplyFromHeaderCannotAssumeLinkedUserIdentity(t *testing.T) {
 		t.Fatalf("create original email item: %v", err)
 	}
 
+	// The portal customer who owns the request is linked to an internal user,
+	// as a staff member with a portal login would be.
 	var customerID int
-	if err := env.db.QueryRow(`SELECT id FROM portal_customers WHERE email = ?`, original.From.Address).Scan(&customerID); err != nil {
-		t.Fatalf("load email portal customer: %v", err)
+	if err := env.db.QueryRow(`
+		INSERT INTO portal_customers (name, email, created_via) VALUES ('Customer', ?, 'agent') RETURNING id
+	`, original.From.Address).Scan(&customerID); err != nil {
+		t.Fatalf("insert email portal customer: %v", err)
+	}
+	if _, err := env.db.ExecWrite(`UPDATE items SET creator_portal_customer_id = ? WHERE id = ?`, customerID, *originalResult.ItemID); err != nil {
+		t.Fatalf("assign request owner: %v", err)
 	}
 	if _, err := env.db.ExecWrite(`UPDATE portal_customers SET user_id = ? WHERE id = ?`, env.userID, customerID); err != nil {
 		t.Fatalf("link portal customer to internal user: %v", err)
 	}
 
+	keyID := issueReplyKey(t, env, *originalResult.ItemID, original.From.Address)
 	reply := newTestReplyEmail(
 		"<identity-reply@example.com>",
-		"<identity-original@example.com>",
+		keyID,
 		"This From header must not authenticate an internal user.",
 	)
 	result, err := env.processor.ProcessEmail(ctx, reply, env.channelID, 0, env.config)
@@ -440,8 +471,9 @@ func TestProcessor_Reply_WithAttachments(t *testing.T) {
 		t.Fatalf("Failed to create original: %v", err)
 	}
 
-	// Reply with attachment
-	reply := newTestReplyEmail("<reply-att-1@example.com>", "<orig-att-1@example.com>", "Here is the screenshot.")
+	// Reply with attachment, authorized by the request's reply key.
+	keyID := issueReplyKey(t, env, *origResult.ItemID, "sender@example.com")
+	reply := newTestReplyEmail("<reply-att-1@example.com>", keyID, "Here is the screenshot.")
 	reply.Attachments = []email.Attachment{
 		{
 			Filename:    "screenshot.png",
@@ -789,8 +821,11 @@ func TestProcessor_RemovedParticipantReplyDoesNotAppendToTicket(t *testing.T) {
 		t.Fatalf("add participant: %v", err)
 	}
 
-	// An active participant's reply is accepted as a comment on the ticket.
-	firstReply := newTestReplyEmail("<participant-reply-1@example.com>", "<removed-original@example.com>", "Adding context from the participant")
+	// An active participant's reply is accepted as a comment on the ticket. The
+	// reply key sent to them is what authorizes it; participants can be several
+	// recipients, so each one gets their own key.
+	participantKey := issueReplyKey(t, env, itemID, "participant@example.com")
+	firstReply := newTestReplyEmail("<participant-reply-1@example.com>", participantKey, "Adding context from the participant")
 	firstReply.From = email.EmailAddress{Name: "Participant", Address: "participant@example.com"}
 	firstResult, err := env.processor.ProcessEmail(ctx, firstReply, env.channelID, 0, env.config)
 	if err != nil {
@@ -805,7 +840,7 @@ func TestProcessor_RemovedParticipantReplyDoesNotAppendToTicket(t *testing.T) {
 	}
 
 	// The removed participant's next reply must not reach the original ticket.
-	secondReply := newTestReplyEmail("<participant-reply-2@example.com>", "<removed-original@example.com>", "Sneaking back into the thread")
+	secondReply := newTestReplyEmail("<participant-reply-2@example.com>", participantKey, "Sneaking back into the thread")
 	secondReply.From = email.EmailAddress{Name: "Participant", Address: "participant@example.com"}
 	secondReply.Attachments = []email.Attachment{{
 		Filename:    "sneaky.png",
@@ -850,7 +885,7 @@ func TestProcessor_RemovedParticipantReplyDoesNotAppendToTicket(t *testing.T) {
 	if _, _, err := participants.Add(ctx, env.userID, itemID, services.ParticipantInput{PortalCustomerID: &customerID}); err != nil {
 		t.Fatalf("re-add participant: %v", err)
 	}
-	thirdReply := newTestReplyEmail("<participant-reply-3@example.com>", "<removed-original@example.com>", "Re-added and replying")
+	thirdReply := newTestReplyEmail("<participant-reply-3@example.com>", participantKey, "Re-added and replying")
 	thirdReply.From = email.EmailAddress{Name: "Participant", Address: "participant@example.com"}
 	thirdResult, err := env.processor.ProcessEmail(ctx, thirdReply, env.channelID, 0, env.config)
 	if err != nil {

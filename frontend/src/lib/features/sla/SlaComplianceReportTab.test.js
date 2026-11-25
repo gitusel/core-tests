@@ -10,7 +10,12 @@ vi.mock('../../stores/i18n.svelte.js', () => ({
 }));
 
 vi.mock('../../utils/dateFormatter.js', () => ({
-  formatDate: (value) => String(value),
+  // The shared date picker's Today control also formats a Date through here,
+  // so keep ISO dates parseable instead of stringifying the Date object.
+  formatDate: (value) => {
+    if (value instanceof Date) return value.toISOString().slice(0, 10);
+    return String(value);
+  },
 }));
 
 import { sla } from '../../api/sla.js';
@@ -74,23 +79,34 @@ describe('SlaComplianceReportTab', () => {
     expect(screen.getByText('ABC-7')).toBeTruthy();
   });
 
+  // Both bounds are the shared DatePicker: open its popover, page back to the
+  // wanted month, then pick the day.
+  async function pickDate(testid, iso) {
+    await fireEvent.click(screen.getByTestId(testid));
+    const calendar = await screen.findByTestId(`${testid}-calendar`);
+    const wantedMonth = iso.slice(0, 7);
+    for (let guard = 0; guard < 24; guard += 1) {
+      const shownMonth = calendar.getAttribute('data-calendar-start')?.slice(0, 7) ?? '';
+      if (shownMonth === wantedMonth) break;
+      const nav = shownMonth > wantedMonth ? 'prev' : 'next';
+      await fireEvent.click(screen.getByTestId(`${testid}-calendar-${nav}`));
+    }
+    await fireEvent.click(await screen.findByTestId(`${testid}-calendar-day-${iso}`));
+  }
+
   it('reloads the report for the selected date range', async () => {
     render(SlaComplianceReportTab, { workspaceId: 5 });
     await screen.findByTestId('sla-report-metric-1');
 
-    await fireEvent.input(screen.getByTestId('sla-report-from'), {
-      target: { value: '2026-01-01' },
-    });
-    await fireEvent.input(screen.getByTestId('sla-report-to'), {
-      target: { value: '2026-02-01' },
-    });
+    await pickDate('sla-report-from', '2026-01-01');
+    await pickDate('sla-report-to', '2026-02-01');
     await fireEvent.click(screen.getByTestId('sla-report-apply'));
 
     await waitFor(() =>
       expect(sla.getReport).toHaveBeenLastCalledWith(5, {
         from: '2026-01-01',
         to: '2026-02-01',
-      })
+      }),
     );
   });
 });

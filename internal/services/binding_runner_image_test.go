@@ -90,7 +90,7 @@ func TestBindingService_UpdateAgentConfig_RunnerImage(t *testing.T) {
 	poolID := 4
 	poolBinding, err := st.Bindings.Insert(ctx, &models.WorkspaceAgentBinding{
 		WorkspaceID: 1, ActingUserID: st.AgentID, ActingUserKind: ActingIdentityKindAgent,
-		TargetPoolID: &poolID, TokenScopes: []string{"items:read"}, CreatedByUserID: st.AdminID,
+		TargetPoolID: &poolID, TokenScopes: []string{"items:read"}, CreatedByUserID: ptrInt(st.AdminID),
 	})
 	if err != nil {
 		t.Fatalf("seed pool binding: %v", err)
@@ -128,7 +128,7 @@ func TestBindingService_UpdateAgentConfig_RunnerImage(t *testing.T) {
 	// A non-pool binding rejects any image.
 	localBinding, err := st.Bindings.Insert(ctx, &models.WorkspaceAgentBinding{
 		WorkspaceID: 1, ActingUserID: st.SvcUserID, ActingUserKind: ActingIdentityKindAgent,
-		TokenScopes: []string{"items:read"}, CreatedByUserID: st.AdminID,
+		TokenScopes: []string{"items:read"}, CreatedByUserID: ptrInt(st.AdminID),
 	})
 	if err != nil {
 		t.Fatalf("seed local binding: %v", err)
@@ -155,7 +155,7 @@ func TestBindingService_PoolRun_CarriesRunnerImage(t *testing.T) {
 		RunnerImage:     image,
 		TokenScopes:     []string{"items:read"},
 		TokenTTLMinutes: 15,
-		CreatedByUserID: st.AdminID,
+		CreatedByUserID: ptrInt(st.AdminID),
 	})
 	if err != nil {
 		t.Fatalf("seed pool binding: %v", err)

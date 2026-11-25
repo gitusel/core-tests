@@ -26,12 +26,15 @@ vi.mock('../api/channels.js', () => ({
 vi.mock('../stores/i18n.svelte.js', () => ({
   t: (key, params) =>
     [key, ...(params && typeof params === 'object' ? Object.values(params) : [])].join(' '),
+  // The component only imports `t`, but the store module's real surface
+  // includes `i18n`; keep a locale so downstream formatting stays Gregorian.
+  i18n: { locale: 'en' },
 }));
 
 import EmailLogModal from './EmailLogModal.svelte';
 import { channels } from '../api/channels.js';
 
-const channel = { id: 7, name: 'Support', config: '{}' };
+const channel = { id: 7, name: 'Support', type: 'email', config: '{}' };
 
 const rateLimitedLog = {
   state: { last_checked_at: null, last_uid: 2, error_count: 0, last_error: '', rate_limited_count: 1 },

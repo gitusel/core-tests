@@ -49,7 +49,9 @@ describe('ItemsTable links', () => {
     const link = screen.getByRole('link', { name: 'SP-27' });
     await fireEvent.click(link);
 
-    expect(openItem).toHaveBeenCalledWith(42);
+    // The row's workspace id is forwarded so the caller can resolve the item
+    // without a second lookup.
+    expect(openItem).toHaveBeenCalledWith(42, 3);
   });
 
   it('keeps a real href so modified clicks still open a new tab', () => {

@@ -52,7 +52,7 @@ describe('EmailIntakeSection', () => {
 
     expect(view.getByTestId('email-intake-counts')).toHaveTextContent('Delivery failure: 2');
     expect(view.getByTestId('email-intake-counts')).toHaveTextContent('Auto-reply: 1');
-    expect(view.getByText('3 skipped messages')).toBeInTheDocument();
+    expect(view.getByText('3 held or skipped messages')).toBeInTheDocument();
 
     const firstRow = view.getByTestId('email-intake-row-1');
     expect(firstRow).toHaveTextContent('Delivery failure');
@@ -66,10 +66,8 @@ describe('EmailIntakeSection', () => {
     getEmailIntakeDiagnostics.mockResolvedValue({ counts: [], messages: [] });
     const view = render(EmailIntakeSection);
     await waitFor(() => expect(getEmailIntakeDiagnostics).toHaveBeenCalledTimes(1));
-    expect(view.getByText('0 skipped messages')).toBeInTheDocument();
-    expect(
-      view.getByText('No system-generated mail was skipped in this window.')
-    ).toBeInTheDocument();
+    expect(view.getByText('0 held or skipped messages')).toBeInTheDocument();
+    expect(view.getByText('No held or skipped mail in this window.')).toBeInTheDocument();
   });
 
   test('reloads with the selected window', async () => {

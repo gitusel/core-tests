@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => ({
   canEditOthersComments: vi.fn(),
 }));
 
-vi.mock('../../api/milestones.js', () => ({
+vi.mock('../../api/planning.js', () => ({
   milestones: { getComments: mocks.getComments },
 }));
 vi.mock('../../stores/auth.svelte.js', () => ({

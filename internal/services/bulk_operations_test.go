@@ -314,8 +314,13 @@ func TestCompleteIterationBoundedAtRealisticCardinalities(t *testing.T) {
 				t.Fatalf("Complete: %v", err)
 			}
 			elapsed := time.Since(started)
-			if result.MovedCount != itemCount || result.SQLStatements != 11 {
-				t.Fatalf("completion = moved:%d SQL:%d, want %d/11", result.MovedCount, result.SQLStatements, itemCount)
+			// The bounded budget: three preflight reads (source scope, target
+			// scope, incomplete items) that keep authorization and validation on
+			// owned connections, then a fixed set of batched statements inside
+			// the transaction and when re-loading the moved items. The count is
+			// constant in itemCount — that is what this test guards.
+			if result.MovedCount != itemCount || result.SQLStatements != 14 {
+				t.Fatalf("completion = moved:%d SQL:%d, want %d/14", result.MovedCount, result.SQLStatements, itemCount)
 			}
 			if permissionCalls.Load() != 1 {
 				t.Fatalf("workspace permission calls = %d, want 1", permissionCalls.Load())
@@ -365,8 +370,10 @@ func TestCompleteIterationRetryAndLimitAreDeterministic(t *testing.T) {
 		if err != nil {
 			t.Fatalf("retry completion: %v", err)
 		}
-		if !retry.AlreadyCompleted || retry.MovedCount != 0 || retry.SQLStatements != 1 {
-			t.Fatalf("retry = already:%t moved:%d SQL:%d, want true/0/1", retry.AlreadyCompleted, retry.MovedCount, retry.SQLStatements)
+		// A retry reads the sealed scope in the preflight and again under the
+		// transaction, then stops: two statements, no item work.
+		if !retry.AlreadyCompleted || retry.MovedCount != 0 || retry.SQLStatements != 2 {
+			t.Fatalf("retry = already:%t moved:%d SQL:%d, want true/0/2", retry.AlreadyCompleted, retry.MovedCount, retry.SQLStatements)
 		}
 		var history int
 		if err := fixture.db.QueryRow(`SELECT COUNT(*) FROM item_history WHERE field_name = 'iteration_id'`).Scan(&history); err != nil {
@@ -406,12 +413,12 @@ func TestBulkOperationMetricsReportRollingLatencyAndPressure(t *testing.T) {
 	for i, duration := range []time.Duration{time.Millisecond, 2 * time.Millisecond, 3 * time.Millisecond, 20 * time.Millisecond, 50 * time.Millisecond} {
 		metrics.Observe(BulkOperationObservation{
 			Kind: "iteration_completion", RequestedItems: 100, ChangedItems: 100,
-			SQLStatements: 11, SideEffectsEmitted: 100, PoolInUse: i,
+			SQLStatements: 14, SideEffectsEmitted: 100, PoolInUse: i,
 			Duration: duration, Failed: i == 4,
 		})
 	}
 	stats := metrics.Stats().Operations["iteration_completion"]
-	if stats.Requests != 5 || stats.Failures != 1 || stats.RequestedItems != 500 || stats.SQLStatements != 55 {
+	if stats.Requests != 5 || stats.Failures != 1 || stats.RequestedItems != 500 || stats.SQLStatements != 70 {
 		t.Fatalf("metrics totals = %+v", stats)
 	}
 	if stats.SideEffectsEmitted != 500 || stats.PeakObservedPoolInUse != 4 || stats.LatencySamples != 5 {

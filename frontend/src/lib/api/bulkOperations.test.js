@@ -13,7 +13,7 @@ vi.mock('../utils/crossTabSync.js', () => ({
 const { fetchV2Data } = await import('./core.js');
 const { notifyItemMutation } = await import('../utils/crossTabSync.js');
 const { items } = await import('./items.js');
-const { iterations } = await import('./milestones.js');
+const { iterations } = await import('./planning.js');
 
 describe('bulk operation API clients', () => {
   beforeEach(() => {

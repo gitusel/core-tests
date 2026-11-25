@@ -75,7 +75,9 @@ func TestHandlerExposesDatabaseBackedWindshiftMetrics(t *testing.T) {
 
 	metrics := New(db, "")
 	body := scrape(t, metrics.Handler())
-	assertMetricContains(t, body, `go_sql_open_connections{db_name="windshift"}`)
+	for _, pool := range db.NamedPools() {
+		assertMetricContains(t, body, `go_sql_open_connections{db_name="windshift_`+pool.Name+`"}`)
+	}
 	assertMetricContains(t, body, "windshift_agent_run_queue_depth 1")
 	assertMetricContains(t, body, "windshift_agent_runs_in_flight 1")
 	assertMetricContains(t, body, `windshift_agent_run_outcomes{outcome="succeeded"} 1`)

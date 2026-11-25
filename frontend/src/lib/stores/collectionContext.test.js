@@ -2,7 +2,6 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 import { collections } from '../api/collections.js';
 
 const mocks = vi.hoisted(() => ({
-  routeSubscriber: null,
   fetchCollectionBacklog: vi.fn(),
   fetchCollectionItemChanges: vi.fn(),
   fetchCollectionItems: vi.fn(),
@@ -53,17 +52,6 @@ vi.mock('../features/collections/collectionService.js', () => ({
   fetchCollectionItems: mocks.fetchCollectionItems,
   fetchItemsById: vi.fn(),
   getCollection: mocks.getCollection,
-}));
-
-vi.mock('../router.js', () => ({
-  currentRoute: {
-    subscribe(callback) {
-      mocks.routeSubscriber = callback;
-      callback({ view: 'home', params: {} });
-      return vi.fn();
-    },
-  },
-  GLOBAL_COLLECTION_VIEWS: new Set(['collection-board', 'collection-list']),
 }));
 
 vi.mock('./workspaceDataStore.svelte.js', () => ({
@@ -133,7 +121,7 @@ describe('CollectionStore board ordering', () => {
       referenced_workspace_ids: [60],
     });
 
-    mocks.routeSubscriber({ view: 'workspace-board', params: { id: '60' } });
+    void collectionStore.load('60', null, 'workspace-board');
 
     await vi.waitFor(() => expect(collectionStore.loading).toBe(false));
     expect(collectionStore.items).toContainEqual({ id: 1, status_id: 1 });
@@ -182,7 +170,7 @@ describe('CollectionStore board ordering', () => {
       referenced_workspace_ids: [61],
     });
 
-    mocks.routeSubscriber({ view: 'workspace-board', params: { id: '61' } });
+    void collectionStore.load('61', null, 'workspace-board');
     await vi.advanceTimersByTimeAsync(0);
 
     const unfinishedCalls = () =>
@@ -220,7 +208,7 @@ describe('CollectionStore board ordering', () => {
       watermark: 1,
     });
 
-    mocks.routeSubscriber({ view: 'collection-board', params: { id: '62' } });
+    void collectionStore.load(null, '62', 'collection-board');
     await vi.waitFor(() => expect(collectionStore.loading).toBe(false));
 
     expect(mocks.getCollection).not.toHaveBeenCalled();
@@ -279,7 +267,7 @@ describe('CollectionStore board ordering', () => {
       throw new Error(`unexpected item request: ${JSON.stringify(options)}`);
     });
 
-    mocks.routeSubscriber({ view: 'workspace-board', params: { id: '41' } });
+    void collectionStore.load('41', null, 'workspace-board');
     await vi.waitFor(() => expect(collectionStore.loading).toBe(false));
 
     expect(mocks.fetchCollectionItems).toHaveBeenCalledTimes(2);
@@ -347,7 +335,7 @@ describe('CollectionStore board ordering', () => {
       throw new Error(`unexpected item request: ${JSON.stringify(options)}`);
     });
 
-    mocks.routeSubscriber({ view: 'workspace-board', params: { id: '63' } });
+    void collectionStore.load('63', null, 'workspace-board');
     await vi.waitFor(() => expect(collectionStore.loading).toBe(false));
     expect(collectionStore.items.filter((item) => item.status_id === 2)).toHaveLength(100);
 
@@ -411,7 +399,7 @@ describe('CollectionStore board ordering', () => {
       throw new Error(`unexpected item request: ${JSON.stringify(options)}`);
     });
 
-    mocks.routeSubscriber({ view: 'workspace-board', params: { id: '47' } });
+    void collectionStore.load('47', null, 'workspace-board');
     await vi.waitFor(() => expect(collectionStore.loading).toBe(false));
 
     expect(mocks.fetchCollectionItems).toHaveBeenCalledWith(
@@ -467,7 +455,7 @@ describe('CollectionStore board ordering', () => {
       throw new Error(`unexpected item request: ${JSON.stringify(options)}`);
     });
 
-    mocks.routeSubscriber({ view: 'workspace-board', params: { id: '71' } });
+    void collectionStore.load('71', null, 'workspace-board');
     await vi.waitFor(() => expect(collectionStore.loading).toBe(false));
 
     expect(mocks.fetchCollectionItems).toHaveBeenCalledTimes(1);
@@ -519,7 +507,7 @@ describe('CollectionStore board ordering', () => {
       throw new Error(`unexpected item request: ${JSON.stringify(options)}`);
     });
 
-    mocks.routeSubscriber({ view: 'workspace-board', params: { id: '72' } });
+    void collectionStore.load('72', null, 'workspace-board');
     await vi.waitFor(() => expect(collectionStore.loading).toBe(false));
 
     expect(mocks.fetchCollectionItems).toHaveBeenCalledWith(
@@ -568,7 +556,7 @@ describe('CollectionStore board ordering', () => {
       throw new Error(`unexpected item request: ${JSON.stringify(options)}`);
     });
 
-    mocks.routeSubscriber({ view: 'workspace-board', params: { id: '74' } });
+    void collectionStore.load('74', null, 'workspace-board');
     await vi.waitFor(() => expect(collectionStore.loading).toBe(false));
 
     expect(mocks.fetchCollectionItems).toHaveBeenCalledWith(
@@ -635,7 +623,7 @@ describe('CollectionStore board ordering', () => {
       throw new Error(`unexpected item request: ${JSON.stringify(options)}`);
     });
 
-    mocks.routeSubscriber({ view: 'collection-board', params: { id: '88' } });
+    void collectionStore.load(null, '88', 'collection-board');
     await vi.waitFor(() => expect(collectionStore.loading).toBe(false));
     collectionStore.subFilterQL = 'status = "Done"';
 
@@ -683,7 +671,7 @@ describe('CollectionStore board ordering', () => {
     mocks.fetchCollectionItemChanges.mockResolvedValue({ watermark: 1 });
     mocks.getBoardConfigurationBootstrap.mockResolvedValue({ board_configuration: null });
 
-    mocks.routeSubscriber({ view: 'workspace-board', params: { id: '42' } });
+    void collectionStore.load('42', null, 'workspace-board');
     await vi.waitFor(() => expect(mocks.fetchCollectionItems).toHaveBeenCalledTimes(2));
     expect(mocks.fetchCollectionItems.mock.calls).toEqual(
       expect.arrayContaining([
@@ -733,15 +721,27 @@ describe('CollectionStore board ordering', () => {
     }
 
     mocks.fetchCollectionItems.mockClear();
-    mocks.routeSubscriber({ view: 'workspace-board', params: { id: '43' } });
+    void collectionStore.load('43', null, 'workspace-board');
     // A workspace change must synchronously hide the previous board while the
     // new request is in flight. MainApp reuses the mounted board component.
     expect(collectionStore.items).toEqual([]);
     expect(collectionStore.backlogItems).toEqual([]);
     expect(collectionStore.itemsPagination).toBeNull();
-    await vi.waitFor(() => expect(mocks.fetchCollectionItems).toHaveBeenCalledTimes(2));
+    // CollectionBoard re-applies the board's persisted sort preference once the
+    // viewed board changes (CollectionBoard.svelte: `setSortMode`).
+    collectionStore.setBoardSortMode('bubble');
+    await vi.waitFor(() => expect(collectionStore.loading).toBe(false));
+    const bubbleCalls = () =>
+      mocks.fetchCollectionItems.mock.calls.filter(
+        ([, , options]) => options.order_by === 'last_active_at'
+      );
+    await vi.waitFor(() => expect(bubbleCalls()).toHaveLength(2));
+    // Every request belongs to the new workspace; the page-one and background
+    // page reads both carry the restored Bubble Mode ordering.
     for (const [workspaceId, , options] of mocks.fetchCollectionItems.mock.calls) {
       expect(workspaceId).toBe('43');
+    }
+    for (const [, , options] of bubbleCalls()) {
       expect(options).toEqual(
         expect.objectContaining({ order_by: 'last_active_at', sort_direction: 'desc' })
       );
@@ -767,7 +767,7 @@ describe('CollectionStore board ordering', () => {
     });
     mocks.getBoardConfigurationBootstrap.mockResolvedValue({ board_configuration: null });
 
-    mocks.routeSubscriber({ view: 'workspace-list', params: { id: '44' } });
+    void collectionStore.load('44', null, 'workspace-list');
     await vi.waitFor(() => expect(collectionStore.loading).toBe(false));
 
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -794,7 +794,7 @@ describe('CollectionStore board ordering', () => {
       watermark: 3,
     });
 
-    mocks.routeSubscriber({ view: 'workspace-list', params: { id: '45' } });
+    void collectionStore.load('45', null, 'workspace-list');
     await vi.waitFor(() => expect(collectionStore.loading).toBe(false));
 
     expect(mocks.fetchCollectionItems).toHaveBeenCalledTimes(1);
@@ -803,7 +803,7 @@ describe('CollectionStore board ordering', () => {
 
     mocks.fetchCollectionItems.mockClear();
     mocks.fetchCollectionBacklog.mockClear();
-    mocks.routeSubscriber({ view: 'workspace-backlog', params: { id: '46' } });
+    void collectionStore.load('46', null, 'workspace-backlog');
     await vi.waitFor(() => expect(collectionStore.loading).toBe(false));
 
     expect(mocks.fetchCollectionItems).not.toHaveBeenCalled();
@@ -822,7 +822,7 @@ describe('CollectionStore board ordering', () => {
     });
     mocks.getBoardConfigurationBootstrap.mockResolvedValue({ board_configuration: null });
 
-    mocks.routeSubscriber({ view: 'workspace-list', params: { id: '50' } });
+    void collectionStore.load('50', null, 'workspace-list');
     await vi.waitFor(() => expect(collectionStore.loading).toBe(false));
 
     await collectionStore.setItemsPage(2, 50);
@@ -856,7 +856,7 @@ describe('CollectionStore board ordering', () => {
     });
     mocks.getBoardConfigurationBootstrap.mockResolvedValue({ board_configuration: null });
 
-    mocks.routeSubscriber({ view: 'workspace-board', params: { id: '47' } });
+    void collectionStore.load('47', null, 'workspace-board');
     await vi.waitFor(() => expect(collectionStore.loading).toBe(false));
     await collectionStore.refreshDeltas();
 
@@ -930,7 +930,7 @@ describe('CollectionStore backlog refresh', () => {
       Promise.resolve(backlogPage(options, { titleFor150 }))
     );
 
-    mocks.routeSubscriber({ view: 'workspace-backlog', params: { id: '46' } });
+    void collectionStore.load('46', null, 'workspace-backlog');
     await vi.waitFor(() => expect(collectionStore.loading).toBe(false));
     expect(collectionStore.backlogItems).toHaveLength(100);
 
@@ -954,7 +954,7 @@ describe('CollectionStore backlog refresh', () => {
       Promise.resolve(backlogPage(options, { total: 50 }))
     );
 
-    mocks.routeSubscriber({ view: 'workspace-backlog', params: { id: '47' } });
+    void collectionStore.load('47', null, 'workspace-backlog');
     await vi.waitFor(() => expect(collectionStore.loading).toBe(false));
     mocks.fetchCollectionBacklog.mockClear();
 
@@ -970,7 +970,7 @@ describe('CollectionStore backlog refresh', () => {
       Promise.resolve(backlogPage(options, { total }))
     );
 
-    mocks.routeSubscriber({ view: 'workspace-backlog', params: { id: '48' } });
+    void collectionStore.load('48', null, 'workspace-backlog');
     await vi.waitFor(() => expect(collectionStore.loading).toBe(false));
     await collectionStore.loadMoreBacklog();
     expect(collectionStore.backlogItems).toHaveLength(200);
@@ -1002,7 +1002,7 @@ describe('CollectionStore list-view sorting', () => {
     });
     mocks.getBoardConfigurationBootstrap.mockResolvedValue({ board_configuration: null });
 
-    mocks.routeSubscriber({ view: 'workspace-list', params: { id: '49' } });
+    void collectionStore.load('49', null, 'workspace-list');
     await vi.waitFor(() => expect(collectionStore.loading).toBe(false));
 
     // The server's sortable fields surface in the store for the header UI.
@@ -1042,7 +1042,7 @@ describe('CollectionStore local reconciliation coalescing', () => {
     });
     mocks.getBoardConfigurationBootstrap.mockResolvedValue({ board_configuration: null });
 
-    mocks.routeSubscriber({ view: 'workspace-list', params: { id: '60' } });
+    void collectionStore.load('60', null, 'workspace-list');
     await vi.waitFor(() => expect(collectionStore.loading).toBe(false));
     // Commit the cursor to 10 so later calls can assert the preserved value.
     await collectionStore.refreshDeltas();
@@ -1145,7 +1145,7 @@ describe('CollectionStore local reconciliation coalescing', () => {
 
     const pending = collectionStore.refreshDeltas();
 
-    mocks.routeSubscriber({ view: 'workspace-list', params: { id: '61' } });
+    void collectionStore.load('61', null, 'workspace-list');
     await vi.waitFor(() => expect(collectionStore.loading).toBe(false));
 
     resolveChanges({ watermark: 99, changed_item_ids: [1], removed_item_ids: [] });
@@ -1199,7 +1199,7 @@ describe('CollectionStore hierarchy continuation', () => {
     );
     mocks.getBoardConfigurationBootstrap.mockResolvedValue({ board_configuration: null });
 
-    mocks.routeSubscriber({ view: 'workspace-map', params: { id: '77' } });
+    void collectionStore.load('77', null, 'workspace-map');
     await vi.waitFor(() => expect(collectionStore.loading).toBe(false));
 
     expect(collectionStore.items).toHaveLength(250);
@@ -1244,7 +1244,7 @@ describe('CollectionStore hierarchy continuation', () => {
     });
     mocks.getBoardConfigurationBootstrap.mockResolvedValue({ board_configuration: null });
 
-    mocks.routeSubscriber({ view: 'workspace-tree', params: { id: '88' } });
+    void collectionStore.load('88', null, 'workspace-tree');
     await vi.waitFor(() => expect(collectionStore.loading).toBe(false));
     expect(collectionStore.items).toHaveLength(100);
 
@@ -1289,7 +1289,7 @@ describe('CollectionStore hierarchy continuation', () => {
     });
     mocks.getBoardConfigurationBootstrap.mockResolvedValue({ board_configuration: null });
 
-    mocks.routeSubscriber({ view: 'workspace-tree', params: { id: '99' } });
+    void collectionStore.load('99', null, 'workspace-tree');
     await vi.waitFor(() => expect(collectionStore.loading).toBe(false));
     for (let index = 0; index < 11; index += 1) {
       await collectionStore.loadMoreItems();
@@ -1322,7 +1322,7 @@ describe('CollectionStore hierarchy level scope', () => {
     );
     mocks.getBoardConfigurationBootstrap.mockResolvedValue({ board_configuration: null });
 
-    mocks.routeSubscriber({ view: 'workspace-tree', params: { id: '100' } });
+    void collectionStore.load('100', null, 'workspace-tree');
     await vi.waitFor(() => expect(collectionStore.loading).toBe(false));
 
     collectionStore.setHierarchyLevel(2);
@@ -1336,7 +1336,7 @@ describe('CollectionStore hierarchy level scope', () => {
 
     // A non-hierarchy view never carries the level scope.
     collectionStore.invalidate();
-    mocks.routeSubscriber({ view: 'workspace-list', params: { id: '101' } });
+    void collectionStore.load('101', null, 'workspace-list');
     await vi.waitFor(() => expect(collectionStore.loading).toBe(false));
     expect(mocks.fetchCollectionItems).toHaveBeenLastCalledWith(
       '101',
@@ -1358,7 +1358,7 @@ describe('CollectionStore hierarchy level scope', () => {
     );
     mocks.getBoardConfigurationBootstrap.mockResolvedValue({ board_configuration: null });
 
-    mocks.routeSubscriber({ view: 'workspace-tree', params: { id: '100', collectionId: '55' } });
+    void collectionStore.load('100', '55', 'workspace-tree');
     await vi.waitFor(() => expect(collectionStore.loading).toBe(false));
     await vi.waitFor(() => expect(collectionStore.collectionTotal).toBe(300));
 
@@ -1418,7 +1418,7 @@ describe('CollectionStore hierarchy level resolution', () => {
       levelCountsResult([0, 1]).map((entry, index) => ({ ...entry, total: index }))
     );
 
-    mocks.routeSubscriber({ view: 'workspace-map', params: { id: '201' } });
+    void collectionStore.load('201', null, 'workspace-map');
     await vi.waitFor(() => expect(collectionStore.loading).toBe(false));
 
     // The level resolves before the item page, so no unscoped page is issued.
@@ -1431,20 +1431,24 @@ describe('CollectionStore hierarchy level resolution', () => {
     expect(mocks.preferences.viewState['workspace-201'].map.hierarchy_level).toBe(1);
   });
 
-  it('reuses level counts across hierarchy views in one scope', async () => {
+  it('re-resolves the hierarchy level when the hierarchy view changes', async () => {
     mocks.getLevelCounts.mockResolvedValue(levelCountsResult([1]));
 
-    mocks.routeSubscriber({ view: 'workspace-map', params: { id: '202' } });
+    void collectionStore.load('202', null, 'workspace-map');
     await vi.waitFor(() => expect(collectionStore.loading).toBe(false));
     expect(mocks.getLevelCounts).toHaveBeenCalledTimes(1);
 
-    // Switching to another hierarchy view in the same scope must not re-issue
-    // the lookup, and the resolved level still applies.
-    collectionStore.invalidate();
-    mocks.routeSubscriber({ view: 'workspace-tree', params: { id: '202' } });
+    // A different view in the same scope is a fresh projection: the level is
+    // resolved from the new view's counts and still applies to its fetches.
+    void collectionStore.load('202', null, 'workspace-tree');
     await vi.waitFor(() => expect(collectionStore.loading).toBe(false));
-    expect(mocks.getLevelCounts).toHaveBeenCalledTimes(1);
+    expect(mocks.getLevelCounts).toHaveBeenCalledTimes(2);
     expect(collectionStore.hierarchyLevel).toBe(1);
+    expect(mocks.fetchCollectionItems).toHaveBeenLastCalledWith(
+      '202',
+      null,
+      expect.objectContaining({ level: 1, include_has_children: true })
+    );
   });
 
   it('does not reuse a level or counts across workspace boundaries', async () => {
@@ -1452,12 +1456,11 @@ describe('CollectionStore hierarchy level resolution', () => {
       .mockResolvedValueOnce(levelCountsResult([1]))
       .mockResolvedValueOnce(levelCountsResult([2]));
 
-    mocks.routeSubscriber({ view: 'workspace-map', params: { id: '210' } });
+    void collectionStore.load('210', null, 'workspace-map');
     await vi.waitFor(() => expect(collectionStore.loading).toBe(false));
     expect(collectionStore.hierarchyLevel).toBe(1);
 
-    collectionStore.invalidate();
-    mocks.routeSubscriber({ view: 'workspace-map', params: { id: '211' } });
+    void collectionStore.load('211', null, 'workspace-map');
     await vi.waitFor(() => expect(collectionStore.loading).toBe(false));
 
     expect(collectionStore.hierarchyLevel).toBe(2);
@@ -1570,7 +1573,7 @@ describe('CollectionStore deferred collection count', () => {
       })
     );
 
-    mocks.routeSubscriber({ view: 'workspace-list', params: { id: '90' } });
+    void collectionStore.load('90', null, 'workspace-list');
     await vi.waitFor(() => expect(collectionStore.loading).toBe(false));
 
     // Rows are visible while the count is still in flight.
@@ -1591,7 +1594,7 @@ describe('CollectionStore deferred collection count', () => {
     );
     mocks.fetchCollectionTotal.mockResolvedValue({ total: 8, watermark: 100 });
 
-    mocks.routeSubscriber({ view: 'workspace-list', params: { id: '91' } });
+    void collectionStore.load('91', null, 'workspace-list');
     await vi.waitFor(() => expect(collectionStore.loading).toBe(false));
     expect(mocks.fetchCollectionTotal).toHaveBeenCalledTimes(1);
 
@@ -1610,7 +1613,7 @@ describe('CollectionStore deferred collection count', () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     mocks.fetchCollectionTotal.mockResolvedValueOnce({ total: 12, watermark: 100 });
 
-    mocks.routeSubscriber({ view: 'workspace-list', params: { id: '92' } });
+    void collectionStore.load('92', null, 'workspace-list');
     await vi.waitFor(() => expect(collectionStore.collectionTotal).toBe(12));
 
     mocks.fetchCollectionTotal.mockRejectedValueOnce(new Error('offline'));
@@ -1631,10 +1634,10 @@ describe('CollectionStore deferred collection count', () => {
     );
     mocks.fetchCollectionTotal.mockResolvedValue({ total: 50, watermark: 100 });
 
-    mocks.routeSubscriber({ view: 'workspace-list', params: { id: '93' } });
+    void collectionStore.load('93', null, 'workspace-list');
     await vi.waitFor(() => expect(collectionStore.loading).toBe(false));
 
-    mocks.routeSubscriber({ view: 'workspace-list', params: { id: '94' } });
+    void collectionStore.load('94', null, 'workspace-list');
     await vi.waitFor(() => expect(collectionStore.loading).toBe(false));
     await vi.waitFor(() => expect(collectionStore.collectionTotal).toBe(50));
 
@@ -1646,7 +1649,7 @@ describe('CollectionStore deferred collection count', () => {
   });
 
   it('requests the unfiltered count for the loaded scope', async () => {
-    mocks.routeSubscriber({ view: 'workspace-list', params: { id: '95' } });
+    void collectionStore.load('95', null, 'workspace-list');
     await vi.waitFor(() => expect(collectionStore.collectionTotal).toBe(300));
 
     expect(mocks.fetchCollectionTotal).toHaveBeenCalledWith(
@@ -1662,7 +1665,7 @@ describe('CollectionStore deferred collection count', () => {
     );
     mocks.fetchCollectionTotal.mockResolvedValue({ total: 3, watermark: 4 });
 
-    mocks.routeSubscriber({ view: 'workspace-list', params: { id: '96' } });
+    void collectionStore.load('96', null, 'workspace-list');
     await vi.waitFor(() => expect(collectionStore.collectionTotal).toBe(3));
 
     await collectionStore.refreshDeltas();
@@ -1675,7 +1678,7 @@ describe('CollectionStore deferred collection count', () => {
   });
 
   it('does not refetch the count for a delta with no loaded changes', async () => {
-    mocks.routeSubscriber({ view: 'workspace-list', params: { id: '97' } });
+    void collectionStore.load('97', null, 'workspace-list');
     await vi.waitFor(() => expect(collectionStore.collectionTotal).toBe(300));
     const countCalls = mocks.fetchCollectionTotal.mock.calls.length;
 

@@ -10,7 +10,8 @@ import (
 )
 
 func TestMetricsEndpointIsPublicAndUsesRoutePatterns(t *testing.T) {
-	server, _ := StartTestServer(t, GetDBType())
+	dbType := GetDBType()
+	server, _ := StartTestServer(t, dbType)
 
 	healthResponse := makeAnonymousRequest(t, server, http.MethodGet, "/healthz")
 	_, _ = io.Copy(io.Discard, healthResponse.Body)
@@ -32,14 +33,23 @@ func TestMetricsEndpointIsPublicAndUsesRoutePatterns(t *testing.T) {
 		t.Fatalf("Content-Type = %q, want Prometheus text format", got)
 	}
 	text := string(body)
-	for _, metric := range []string{
+	// One series per physical pool, not one per database: SQLite exposes its
+	// reader and writer pools separately and PostgreSQL exposes the shared one.
+	sqlPools := []string{"windshift_shared"}
+	if dbType == "sqlite" {
+		sqlPools = []string{"windshift_reader", "windshift_writer"}
+	}
+	metrics := []string{
 		"go_goroutines ",
 		"windshift_process_open_fds ",
-		`go_sql_open_connections{db_name="windshift"}`,
 		`windshift_http_requests_total{method="GET",route="/healthz",status_code="200"} 1`,
 		"windshift_agent_run_queue_depth 0",
 		"windshift_agent_runs_in_flight 0",
-	} {
+	}
+	for _, pool := range sqlPools {
+		metrics = append(metrics, `go_sql_open_connections{db_name="`+pool+`"}`)
+	}
+	for _, metric := range metrics {
 		if !strings.Contains(text, metric) {
 			t.Fatalf("metrics do not contain %q\n%s", metric, text)
 		}

@@ -22,7 +22,7 @@ func TestBindingService_UpdateAgentConfig_ChangesLLMConnection(t *testing.T) {
 	oldLLM := 1
 	bindingID, err := st.Bindings.Insert(ctx, &models.WorkspaceAgentBinding{
 		WorkspaceID: 1, ActingUserID: st.AgentID, ActingUserKind: ActingIdentityKindAgent,
-		LLMConnectionID: &oldLLM, TokenTTLMinutes: 30, CreatedByUserID: st.AdminID,
+		LLMConnectionID: &oldLLM, TokenTTLMinutes: 30, CreatedByUserID: ptrInt(st.AdminID),
 	})
 	if err != nil {
 		t.Fatalf("seed binding: %v", err)
@@ -61,7 +61,7 @@ func TestBindingService_UpdateAgentConfig_LLMConnectionValidation(t *testing.T) 
 	oldLLM := validTestLLMConnectionID
 	bindingID, err := st.Bindings.Insert(ctx, &models.WorkspaceAgentBinding{
 		WorkspaceID: 1, ActingUserID: st.AgentID, ActingUserKind: ActingIdentityKindAgent,
-		LLMConnectionID: &oldLLM, TokenTTLMinutes: 30, CreatedByUserID: st.AdminID,
+		LLMConnectionID: &oldLLM, TokenTTLMinutes: 30, CreatedByUserID: ptrInt(st.AdminID),
 	})
 	if err != nil {
 		t.Fatalf("seed binding: %v", err)

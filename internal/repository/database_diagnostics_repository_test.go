@@ -72,13 +72,32 @@ func TestDatabaseDiagnosticsRepositoryRegistersNamedPools(t *testing.T) {
 		t.Fatalf("register SSH pool: %v", err)
 	}
 	stats := repo.PoolStats()
-	if len(stats) != 2 {
-		t.Fatalf("pool count = %d, want 2", len(stats))
+	// One row per physical pool: SQLite reports its reader and writer pools
+	// separately, so the main and SSH databases contribute two rows each.
+	byNameRole := make(map[string]DatabasePoolStats, len(stats))
+	for _, pool := range stats {
+		key := pool.Name + "/" + pool.Role
+		if _, seen := byNameRole[key]; seen {
+			t.Fatalf("duplicate pool row %q", key)
+		}
+		byNameRole[key] = pool
 	}
-	if stats[0].Name != "main" || stats[0].MaxOpenConnections != 4 {
-		t.Fatalf("main stats = %+v", stats[0])
+	want := map[string]int{
+		"main/reader": 4,
+		"main/writer": 1,
+		"ssh/reader":  2,
+		"ssh/writer":  1,
 	}
-	if stats[1].Name != "ssh" || stats[1].MaxOpenConnections != 2 {
-		t.Fatalf("SSH stats = %+v", stats[1])
+	if len(byNameRole) != len(want) {
+		t.Fatalf("pool count = %d, want %d (%v)", len(byNameRole), len(want), byNameRole)
+	}
+	for key, maxOpen := range want {
+		pool, ok := byNameRole[key]
+		if !ok {
+			t.Fatalf("missing pool row %q; got %v", key, byNameRole)
+		}
+		if pool.MaxOpenConnections != maxOpen {
+			t.Fatalf("%s MaxOpenConnections = %d, want %d", key, pool.MaxOpenConnections, maxOpen)
+		}
 	}
 }

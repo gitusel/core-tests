@@ -44,8 +44,8 @@ func TestStopTimerWithoutRealCustomerCreatesWorklog(t *testing.T) {
 	if err != nil {
 		t.Fatalf("StopTimerByID: %v", err)
 	}
-	if !result.WorklogCreated {
-		t.Fatal("timer on a no-customer project did not create a worklog")
+	if !result.Booked || result.WorklogID == nil {
+		t.Fatalf("timer on a no-customer project did not create a worklog: %+v", result)
 	}
 
 	var timerCount, worklogCount int
@@ -77,10 +77,28 @@ func TestStopTimerWithoutRealCustomerCreatesWorklog(t *testing.T) {
 
 func TestStopTimerAttributesWorklogToUserLocalStartDate(t *testing.T) {
 	fixture := newTimerServiceFixture(t, true, false)
+	losAngeles, err := time.LoadLocation("America/Los_Angeles")
+	if err != nil {
+		t.Fatalf("load America/Los_Angeles: %v", err)
+	}
 	if _, err := fixture.db.ExecWrite("UPDATE users SET timezone = 'America/Los_Angeles' WHERE id = ?", fixture.userID); err != nil {
 		t.Fatalf("update timezone: %v", err)
 	}
-	start := time.Date(2026, time.July, 14, 0, 30, 0, 0, time.UTC)
+	// Pick a start inside the last day whose UTC hour falls in Los Angeles'
+	// previous-day window (UTC-7 in summer): the booked date must then come
+	// from the user's local calendar, never the UTC one.
+	now := time.Now().UTC()
+	var start time.Time
+	for back := 1; back < 23; back++ {
+		candidate := now.Truncate(time.Hour).Add(-time.Duration(back) * time.Hour)
+		if hour := candidate.Hour(); hour >= 1 && hour <= 6 {
+			start = candidate
+			break
+		}
+	}
+	if start.IsZero() {
+		t.Fatal("no discriminating start instant in the last day")
+	}
 	if _, err := fixture.db.ExecWrite("UPDATE active_timers SET start_time_utc = ? WHERE id = ?", start.Unix(), fixture.timerID); err != nil {
 		t.Fatalf("update timer start: %v", err)
 	}
@@ -92,8 +110,12 @@ func TestStopTimerAttributesWorklogToUserLocalStartDate(t *testing.T) {
 	if err := fixture.db.QueryRow("SELECT date FROM time_worklogs WHERE user_id = ?", fixture.userID).Scan(&dateUnix); err != nil {
 		t.Fatalf("read worklog date: %v", err)
 	}
-	if got := time.Unix(dateUnix, 0).UTC().Format(time.DateOnly); got != "2026-07-13" {
-		t.Fatalf("worklog date = %s, want user-local timer start date 2026-07-13", got)
+	localDate := start.In(losAngeles).Format(time.DateOnly)
+	if localDate == start.Format(time.DateOnly) {
+		t.Fatalf("test start %s is not discriminating: local and UTC dates agree", start)
+	}
+	if got := time.Unix(dateUnix, 0).UTC().Format(time.DateOnly); got != localDate {
+		t.Fatalf("worklog date = %s, want the user-local timer start date %s", got, localDate)
 	}
 }
 
@@ -144,9 +166,10 @@ func newTimerServiceFixture(t *testing.T, withCustomer, withItem bool) timerServ
 
 	repo := repository.NewActiveTimerRepository(db)
 	return timerServiceFixture{
-		db:          db,
-		repo:        repo,
-		service:     NewTimerService(repo, repository.NewItemRepository(db), nil, nil),
+		db:   db,
+		repo: repo,
+		service: NewTimerService(repo, repository.NewTimeWorklogDraftRepository(db),
+			repository.NewItemRepository(db), NewTimeWorklogService(db), nil, nil),
 		userID:      userID,
 		workspaceID: workspaceID,
 		projectID:   projectID,

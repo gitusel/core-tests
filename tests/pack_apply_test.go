@@ -179,22 +179,8 @@ func applyPack(t *testing.T, server *TestServer, endpoint string, archive []byte
 	resp := makeMultipartBearerRequest(t, server, endpoint, fields, "pack.tar.gz", archive)
 	defer resp.Body.Close()
 	AssertStatusCode(t, resp, http.StatusOK)
-	{
-		raw, _ := io.ReadAll(resp.Body)
-		t.Logf("PACK REPORT: %s", raw)
-		var decoded struct {
-			Data struct {
-				Status      string           `json:"status"`
-				Stages      []map[string]any `json:"stages"`
-				Plugins     []map[string]any `json:"plugins"`
-				Conformance map[string]any   `json:"conformance"`
-			} `json:"data"`
-		}
-		if err := json.Unmarshal(raw, &decoded); err != nil {
-			t.Fatalf("decode report: %v", err)
-		}
-		return decoded.Data.Status, decoded.Data.Stages, decoded.Data.Plugins, decoded.Data.Conformance
-	}
+	raw, _ := io.ReadAll(resp.Body)
+	t.Logf("PACK REPORT: %s", raw)
 	var decoded struct {
 		Data struct {
 			Status      string           `json:"status"`
@@ -203,7 +189,9 @@ func applyPack(t *testing.T, server *TestServer, endpoint string, archive []byte
 			Conformance map[string]any   `json:"conformance"`
 		} `json:"data"`
 	}
-	DecodeJSON(t, resp, &decoded)
+	if err := json.Unmarshal(raw, &decoded); err != nil {
+		t.Fatalf("decode report: %v", err)
+	}
 	return decoded.Data.Status, decoded.Data.Stages, decoded.Data.Plugins, decoded.Data.Conformance
 }
 

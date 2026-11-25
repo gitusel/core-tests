@@ -34,7 +34,7 @@ describe('workspace API', () => {
     await workspaces.getProjects(42);
 
     expect(fetchV2Data).toHaveBeenCalledOnce();
-    expect(fetchV2Data).toHaveBeenCalledWith('/workspaces/42/time-projects');
+    expect(fetchV2Data).toHaveBeenCalledWith('/workspaces/42/time-projects', {});
   });
 
   it('normalizes workspace-scoped v2 statuses', async () => {

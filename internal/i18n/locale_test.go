@@ -43,7 +43,7 @@ func TestSupported(t *testing.T) {
 	// Pinned to the shipped set; update alongside a new locale. The backend
 	// derives this from the generated date-format table, which mirrors the
 	// frontend's SUPPORTED_LOCALES.
-	want := []string{"ar", "de", "en", "es", "fa", "fr", "it", "ko", "pl", "pt-BR", "ru", "zh-CN"}
+	want := []string{"ar", "de", "en", "es", "fa", "fr", "it", "ko", "nl", "pl", "pt-BR", "ru", "zh-CN"}
 	if !slices.Equal(locales, want) {
 		t.Fatalf("Supported() = %v, want %v", locales, want)
 	}

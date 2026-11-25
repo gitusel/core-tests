@@ -9,11 +9,25 @@ const getContentUrl = vi.hoisted(() => vi.fn());
 const errorToast = vi.hoisted(() => vi.fn());
 const showCreatedItemToast = vi.hoisted(() => vi.fn());
 const oncreated = vi.hoisted(() => vi.fn());
+// Complete create-form shape: WorkItemForm binds these fields, and Svelte
+// rejects binding an undefined value to a prop with a fallback.
 const formData = vi.hoisted(() => ({
   name: 'New item',
-  workspace_id: 1,
-  item_type_id: 2,
   description: 'before blob:temp after',
+  due_date: '',
+  start_date: '',
+  end_date: '',
+  workspace_id: 1,
+  priority_id: null,
+  milestone_ids: [],
+  assignee_id: null,
+  team_id: null,
+  iteration_id: null,
+  project_id: null,
+  label_names: [],
+  story_points: '',
+  estimate: '',
+  item_type_id: 2,
   parent_id: null,
 }));
 const pendingDescriptionImages = vi.hoisted(() => [
@@ -37,7 +51,7 @@ vi.mock('../api/collections.js', () => ({
   collectionCategories: { getAll: vi.fn().mockResolvedValue([]) },
 }))
 
-vi.mock('../api/milestones.js', () => ({
+vi.mock('../api/planning.js', () => ({
   milestones: {},
   milestoneCategories: { getAll: vi.fn().mockResolvedValue([]) },
 }));
@@ -95,7 +109,7 @@ import { items } from '../api/items.js';
 import { attachments } from '../api/misc.js';
 import { workspaces } from '../api/workspaces.js';
 import { collections } from '../api/collections.js';
-import { milestones } from '../api/milestones.js';
+import { milestones } from '../api/planning.js';
 
 
 

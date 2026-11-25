@@ -76,8 +76,8 @@ func TestSessionManagerStoresHashedTokensAndValidatesLegacyPlaintext(t *testing.
 	if err := sm.SetAuthPending(verificationSession.ID, AuthPendingPasskeyVerification); err != nil {
 		t.Fatalf("SetAuthPending verification: %v", err)
 	}
-	if err := sm.ClearEnrollmentRequiredByUserID(userID); err != nil {
-		t.Fatalf("ClearEnrollmentRequiredByUserID: %v", err)
+	if err := sm.ClearEnrollmentRequired(session.ID); err != nil {
+		t.Fatalf("ClearEnrollmentRequired: %v", err)
 	}
 	validated, err = sm.ValidateSession(session.Token, "198.51.100.10")
 	if err != nil {

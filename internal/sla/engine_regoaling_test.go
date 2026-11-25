@@ -150,6 +150,12 @@ func TestOverdueCompletionEmitsBreachSideEffects(t *testing.T) {
 	if effects.breaches != 1 {
 		t.Fatalf("breach side effects = %d, want 1 from the overdue completion", effects.breaches)
 	}
+	if !effects.lastBreach.deadline.Equal(*breachedAt) {
+		t.Fatalf("emitted breach deadline = %v, want the recorded breach instant %v", effects.lastBreach.deadline, *breachedAt)
+	}
+	if effects.lastBreach.workspaceID != fixture.workspaceID {
+		t.Fatalf("emitted breach workspace id = %d, want %d", effects.lastBreach.workspaceID, fixture.workspaceID)
+	}
 
 	// Completion before the deadline must still suppress the breach.
 	fixture2 := newEngineFixture(t)

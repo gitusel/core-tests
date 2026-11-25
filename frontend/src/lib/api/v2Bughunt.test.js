@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { assets } from './assets.js';
-import { iterations, milestones } from './milestones.js';
+import { iterations, milestones } from './planning.js';
 
 afterEach(() => vi.unstubAllGlobals());
 

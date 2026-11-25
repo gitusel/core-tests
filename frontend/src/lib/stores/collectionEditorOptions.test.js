@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { workspaces } from '../api/workspaces.js';
 import { getAssignableUsers } from '../api/users.js';
-import { iterations } from '../api/milestones.js';
+import { iterations } from '../api/planning.js';
 import { priorities } from '../api/configuration.js';
 import { customerOrganisations, portalCustomers } from '../api/portal.js';
 import { assets } from '../api/assets.js';
-import { milestones as milestonesApi } from '../api/milestones.js';
+import { milestones as milestonesApi } from '../api/planning.js';
 
 
 
@@ -18,6 +18,7 @@ vi.mock('../api/workspaces.js', () => ({
   workspaces: {
         getStatuses: vi.fn(),
         getProjects: vi.fn(),
+        getPriorities: vi.fn(),
         get: vi.fn(),
       },
 }))
@@ -26,7 +27,7 @@ vi.mock('../api/users.js', () => ({
   getAssignableUsers: vi.fn(),
 }))
 
-vi.mock('../api/milestones.js', () => ({
+vi.mock('../api/planning.js', () => ({
   milestones: { getAll: vi.fn() },
   iterations: { getAll: vi.fn() },
   milestoneCategories: { getAll: vi.fn().mockResolvedValue([]) },
@@ -77,7 +78,10 @@ describe('CollectionEditorOptionsStore', () => {
     const second = store.load(11, 'users');
 
     expect(getAssignableUsers).toHaveBeenCalledTimes(1);
-    expect(getAssignableUsers).toHaveBeenCalledWith(11);
+    expect(getAssignableUsers).toHaveBeenCalledWith(
+      11,
+      expect.objectContaining({ signal: expect.any(AbortSignal) })
+    );
 
     resolveRequest([{ id: 1, username: 'workspace-eleven' }]);
     await Promise.all([first, second]);
@@ -98,26 +102,30 @@ describe('CollectionEditorOptionsStore', () => {
     expect(workspaces.getStatuses).toHaveBeenCalledTimes(2);
   });
 
-  it('resolves priorities through each workspace configuration set', async () => {
-    workspaces.get.mockResolvedValue({ id: 11, configuration_set_id: 9 });
-    priorities.getAll.mockResolvedValue([{ id: 4, name: 'Configured' }]);
+  // The server resolves a workspace's effective priorities, including the
+  // default set when its configuration set defines none, so the client keeps no
+  // fallback chain of its own: it reads once and surfaces what comes back.
+  it('resolves priorities through the workspace, not a client-side fallback', async () => {
+    workspaces.getPriorities.mockResolvedValue([{ id: 4, name: 'Configured' }]);
 
     await store.load(11, 'priorities');
 
-    expect(priorities.getAll).toHaveBeenCalledWith({ configuration_set_id: 9 });
+    expect(workspaces.getPriorities).toHaveBeenCalledWith(
+      11,
+      expect.objectContaining({ signal: expect.any(AbortSignal) })
+    );
+    expect(priorities.getAll).not.toHaveBeenCalled();
     expect(store.get(11).priorities).toEqual([{ id: 4, name: 'Configured' }]);
   });
 
-  it('falls back to the default priorities when a configuration set has none', async () => {
-    const defaultPriorities = [{ id: 5, name: 'Default' }];
-    workspaces.get.mockResolvedValue({ id: 11, configuration_set_id: 9 });
-    priorities.getAll.mockResolvedValueOnce([]).mockResolvedValueOnce(defaultPriorities);
+  it('does not paper over an empty priority list with a second request', async () => {
+    workspaces.getPriorities.mockResolvedValue([]);
 
     await store.load(11, 'priorities');
 
-    expect(priorities.getAll).toHaveBeenNthCalledWith(1, { configuration_set_id: 9 });
-    expect(priorities.getAll).toHaveBeenNthCalledWith(2);
-    expect(store.get(11).priorities).toEqual(defaultPriorities);
+    expect(workspaces.getPriorities).toHaveBeenCalledTimes(1);
+    expect(priorities.getAll).not.toHaveBeenCalled();
+    expect(store.get(11).priorities).toEqual([]);
   });
 
   it('reuses primed workspace-store data without a request', async () => {
@@ -216,10 +224,12 @@ describe('CollectionEditorOptionsStore', () => {
     expect(first).toEqual({ assets: [{ id: 3 }], total: 1 });
     expect(second).toEqual(first);
     expect(assets.getAll).toHaveBeenCalledTimes(1);
-    expect(assets.getAll).toHaveBeenCalledWith(4, {
-      cql: 'status = active',
-      search: 'lap',
-    });
+    // The read carries the store's abort signal alongside the filters.
+    expect(assets.getAll).toHaveBeenCalledWith(
+      4,
+      { cql: 'status = active', search: 'lap' },
+      expect.objectContaining({ signal: expect.any(AbortSignal) })
+    );
   });
 
   it('invalidates one option family across every workspace', async () => {

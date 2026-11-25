@@ -28,8 +28,16 @@ func TestSSRFSafeTransportBlocksLocalTargetsWhenExplicitlyDisallowed(t *testing.
 		_ = response.Body.Close()
 		t.Fatal("SSRF-safe transport connected to a loopback target")
 	}
-	if transport, ok := blockedTransport.(*http.Transport); !ok || transport.Proxy != nil {
-		t.Fatal("SSRF-safe transport honored proxy environment variables")
+	// The transport does read the proxy environment, but only through the
+	// policy hook: with local connections disallowed it declines every proxy,
+	// so a process-level HTTP_PROXY cannot become an unchecked dial path.
+	transport, ok := blockedTransport.(*http.Transport)
+	if !ok || transport.Proxy == nil {
+		t.Fatalf("SSRF-safe transport does not consult the proxy policy: %#v", blockedTransport)
+	}
+	proxyRequest, _ := http.NewRequest(http.MethodGet, server.URL, nil)
+	if proxyURL, err := transport.Proxy(proxyRequest); err != nil || proxyURL != nil {
+		t.Fatalf("proxy policy returned (%v, %v) with local connections disallowed, want (nil, nil)", proxyURL, err)
 	}
 
 	utils.SetAllowLocalConnections(true)

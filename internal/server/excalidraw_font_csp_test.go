@@ -7,13 +7,15 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"windshift/internal/utils"
 )
 
 func TestCreateSecurityHeaders_AllowsExcalidrawFontCDN(t *testing.T) {
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
-	handler := createSecurityHeaders(false, false, nil, nil, nil)(next)
+	handler := createSecurityHeadersWithTrust(false, utils.NewTrustPolicy(false, false, nil, nil), nil, nil)(next)
 
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet, "/", nil)

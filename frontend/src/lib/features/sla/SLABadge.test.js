@@ -154,13 +154,20 @@ describe('SLABadge', () => {
       .mockResolvedValueOnce([cycle({ breached: true })]);
     const id = itemId();
     render(SLABadge, { itemId: id, workspaceId: 5 });
+    await waitFor(() => expect(sla.getItemSLA).toHaveBeenCalledTimes(1));
+
+    // The invalidated read is shared until it settles, then replaced: the
+    // stale page must never reach the cache or the mounted badge.
     window.dispatchEvent(new CustomEvent('refresh-work-items'));
-    expect(await screen.findByText('items.sla.breached')).toBeTruthy();
-
     resolveOldRequest([cycle()]);
-    render(SLABadge, { itemId: id, workspaceId: 5 });
 
-    expect(screen.getByText('items.sla.breached')).toBeTruthy();
+    expect(await screen.findByText('items.sla.breached')).toBeTruthy();
+    expect(sla.getItemSLA).toHaveBeenCalledTimes(2);
+
+    // A remount reads the refreshed value from the shared cache instead of the
+    // stale page, so it issues no third request.
+    render(SLABadge, { itemId: id, workspaceId: 5 });
+    expect(await screen.findByText('items.sla.breached')).toBeTruthy();
     expect(sla.getItemSLA).toHaveBeenCalledTimes(2);
   });
 

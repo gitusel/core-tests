@@ -131,8 +131,8 @@ describe('useCollectionHierarchy', () => {
 
     await waitFor(() => expect(hierarchy.getChildren(1)).toHaveLength(4));
     expect(hierarchy.hasMore(1)).toBe(false);
-    expect(getHierarchy).toHaveBeenLastCalledWith(
-      expect.objectContaining({ perRootOffset: 2 })
+    expect(getHierarchy.mock.calls.at(-1)[0]).toEqual(
+      expect.objectContaining({ perRootOffset: 2 }),
     );
   });
 
@@ -202,10 +202,18 @@ describe('useCollectionHierarchy', () => {
     hierarchyStore.items = [item(1, null, { has_children: true })];
 
     const hierarchy = await renderHarness({ view: 'tree', workspaceId: 1 });
-    await waitFor(() => expect(hierarchy.isLoaded(1)).toBe(true));
+    await waitFor(() => expect(hierarchy.getChildren(1)).toHaveLength(0));
 
+    // A stored collapse is authoritative: the root starts collapsed and its
+    // subtree is not fetched until the user expands it again.
     expect(hierarchy.isExpanded(1)).toBe(false);
-    expect(hierarchy.getChildren(1)).toHaveLength(1);
+    expect(getHierarchy).not.toHaveBeenCalled();
+    expect(preferencesState.viewState['workspace-1'].tree.expanded_ids).toEqual([]);
+
+    hierarchy.expand(1);
+    await waitFor(() => expect(hierarchy.getChildren(1)).toHaveLength(1));
+    expect(hierarchy.isLoaded(1)).toBe(true);
+    expect(preferencesState.viewState['workspace-1'].tree.expanded_ids).toEqual([1]);
   });
 
   it('does not persist expansion when the view has no persistence key', async () => {

@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestNewConfigAcceptsLocalAndDottedRPIDs(t *testing.T) {
+func TestNewConfigAcceptsDomainRPIDs(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -14,7 +14,6 @@ func TestNewConfigAcceptsLocalAndDottedRPIDs(t *testing.T) {
 		rpID string
 	}{
 		{name: "localhost", rpID: "localhost"},
-		{name: "IPv4 address", rpID: "192.0.2.10"},
 		{name: "dotted homelab name", rpID: "windshift.home.arpa"},
 		{name: "public domain", rpID: "windshift.example.com"},
 	}
@@ -35,6 +34,35 @@ func TestNewConfigAcceptsLocalAndDottedRPIDs(t *testing.T) {
 			}
 			if config.RPID != tt.rpID {
 				t.Fatalf("RPID = %q, want %q", config.RPID, tt.rpID)
+			}
+		})
+	}
+}
+
+// WebAuthn only accepts a domain as the relying-party ID, so an installation
+// whose only address is an IP must get a typed error rather than a silent
+// misconfiguration. The server turns this error into "passkeys disabled" and
+// keeps serving, which is why the type matters.
+func TestNewConfigRejectsIPAddressRPID(t *testing.T) {
+	t.Parallel()
+
+	for _, rpID := range []string{"192.0.2.10", "2001:db8::1"} {
+		rpID := rpID
+		t.Run(rpID, func(t *testing.T) {
+			t.Parallel()
+
+			_, err := NewConfig(Options{
+				RPID:        rpID,
+				RPName:      "Windshift Test",
+				Origins:     []string{"https://example.test"},
+				EnableHTTPS: true,
+			})
+			var invalidRPID *InvalidRPIDError
+			if !errors.As(err, &invalidRPID) {
+				t.Fatalf("NewConfig(%q) error = %v, want InvalidRPIDError", rpID, err)
+			}
+			if invalidRPID.RPID != rpID {
+				t.Fatalf("InvalidRPIDError.RPID = %q, want %q", invalidRPID.RPID, rpID)
 			}
 		})
 	}

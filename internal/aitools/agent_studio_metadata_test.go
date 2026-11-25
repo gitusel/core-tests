@@ -53,6 +53,7 @@ func TestStandardCapabilityGroupsExposeMandatoryPresetAndExcludeUnsafeTools(t *t
 
 	wantMandatory := []string{
 		"add_comment",
+		"get_agent_skill",
 		"get_item",
 		"get_item_children",
 		"get_workspace",

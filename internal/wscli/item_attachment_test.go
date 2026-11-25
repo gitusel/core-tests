@@ -177,10 +177,11 @@ func TestCheckUploadableFiles(t *testing.T) {
 	})
 }
 
-// A file at or above the route's 32 MB body cap must be rejected locally with
-// the cap in the message, rather than being sent and coming back as an opaque
-// multipart parse failure.
-func TestCheckUploadableFiles_TooLarge(t *testing.T) {
+// The route's body cap is the effective attachment setting, which an
+// administrator can raise or lower, so the CLI keeps no local copy of it. A
+// large file must pass the pre-flight check and reach the server, whose
+// rejection is what names the configured limit.
+func TestCheckUploadableFiles_LeavesSizeToServer(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "huge.bin")
 	f, err := os.Create(path) //nolint:gosec // G304: path built from t.TempDir()
@@ -188,70 +189,17 @@ func TestCheckUploadableFiles_TooLarge(t *testing.T) {
 		t.Fatalf("create: %v", err)
 	}
 	// Sparse file: no bytes are actually written, but Stat reports the size.
-	if err := f.Truncate(maxItemAttachmentUpload + 1); err != nil {
+	// 1 GiB is above every configured limit the server accepts, so a stale
+	// client-side ceiling would fail here.
+	if err := f.Truncate(1 << 30); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
 	if err := f.Close(); err != nil {
 		t.Fatalf("close: %v", err)
 	}
 
-	err = checkUploadableFiles([]string{path})
-	if err == nil {
-		t.Fatal("expected oversized file to be rejected")
-	}
-	if !strings.Contains(err.Error(), "32 MB") {
-		t.Errorf("error should name the 32 MB cap, got %q", err)
-	}
-}
-
-// A file that fits only once the multipart envelope is accounted for must
-// still be rejected — the server's cap applies to the encoded request body,
-// not the raw file.
-func TestCheckUploadableFiles_EnvelopeCountsTowardCap(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "borderline.bin")
-	f, err := os.Create(path) //nolint:gosec // G304: path built from t.TempDir()
-	if err != nil {
-		t.Fatalf("create: %v", err)
-	}
-	// Exactly at the cap: the raw file fits, the encoded request does not.
-	if err := f.Truncate(maxItemAttachmentUpload); err != nil {
-		t.Fatalf("truncate: %v", err)
-	}
-	if err := f.Close(); err != nil {
-		t.Fatalf("close: %v", err)
-	}
-
-	if err := checkUploadableFiles([]string{path}); err == nil {
-		t.Error("a file exactly at the cap leaves no room for the multipart envelope and must be rejected")
-	}
-}
-
-// multipartEnvelopeSize must report the real overhead of the part the client
-// builds, so the cap check above is exact rather than a guess.
-func TestMultipartEnvelopeSize(t *testing.T) {
-	const filename = "mockup.png"
-	const payload = "0123456789"
-
-	got := multipartEnvelopeSize(filename)
-	if got <= 0 {
-		t.Fatalf("envelope size should be positive, got %d", got)
-	}
-
-	// Encode a real part with the same field name and compare.
-	var seen int64
-	c, _ := newTestPageClient(t, func(w http.ResponseWriter, r *http.Request) {
-		body, _ := io.ReadAll(r.Body)
-		seen = int64(len(body))
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"data":{"id":1}}`))
-	})
-	if _, err := c.UploadItemAttachment(1, filename, strings.NewReader(payload)); err != nil {
-		t.Fatalf("upload: %v", err)
-	}
-
-	if want := seen - int64(len(payload)); got != want {
-		t.Errorf("envelope size: got %d, want %d (actual body %d - payload %d)", got, want, seen, len(payload))
+	if err := checkUploadableFiles([]string{path}); err != nil {
+		t.Fatalf("large file rejected locally; server owns the limit: %v", err)
 	}
 }
 

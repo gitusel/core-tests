@@ -81,9 +81,12 @@ func TestNotificationManagerBulkInsertAndCompactCache(t *testing.T) {
 	dispatcher := &recordingPushDispatcher{}
 	manager.SetPushDispatcher(dispatcher)
 
-	// Warm an empty complete snapshot so inserts update rather than invalidate it.
+	// Warm an empty complete snapshot so the insert has a cache entry to drop.
 	if got, err := manager.GetUserNotifications(1, 50, 0); err != nil || len(got) != 0 {
 		t.Fatalf("warm cache: len=%d err=%v", len(got), err)
+	}
+	if _, ok := manager.cacheSnapshot(1); !ok {
+		t.Fatal("warm cache: no snapshot stored")
 	}
 	stored, err := manager.AddNotifications(testNotifications(1, 1000))
 	if err != nil {
@@ -118,6 +121,14 @@ func TestNotificationManagerBulkInsertAndCompactCache(t *testing.T) {
 		persisted.AuthorizationScope != models.NotificationScopeSystem || deliveryState != "pending" || deliveryAttempts != 0 {
 		t.Fatalf("persisted notification = %+v delivery_state:%s attempts:%d", persisted, deliveryState, deliveryAttempts)
 	}
+	// The bulk insert commits without holding per-user locks and then invalidates
+	// the warm snapshot instead of merging into it; the next read repopulates.
+	if _, ok := manager.cacheSnapshot(1); ok {
+		t.Fatal("cache snapshot survived the bulk insert, want invalidation")
+	}
+	if got, err := manager.GetUserNotifications(1, 50, 0); err != nil || len(got) != 50 || got[0].Title != "Notification 999" {
+		t.Fatalf("repopulated page: len=%d first=%q err=%v", len(got), got[0].Title, err)
+	}
 	cache, ok := manager.cacheSnapshot(1)
 	if !ok || len(cache.Notifications) != notificationCachePageSize || cache.Complete {
 		t.Fatalf("cache snapshot = ok:%v len:%d complete:%v", ok, len(cache.Notifications), cache.Complete)
@@ -129,7 +140,8 @@ func TestNotificationManagerBulkInsertAndCompactCache(t *testing.T) {
 		t.Fatalf("deep page: len=%d err=%v", len(page), err)
 	}
 	stats := manager.GetStats()
-	if stats["insert_batches"] != 1 || stats["inserted"] != 1000 || stats["max_cache_entry_bytes"] <= 0 {
+	if stats["insert_batches"] != 1 || stats["inserted"] != 1000 || stats["max_cache_entry_bytes"] <= 0 ||
+		stats["cache_invalidations"] != 1 {
 		t.Fatalf("manager stats = %+v", stats)
 	}
 	dispatcher.mu.Lock()

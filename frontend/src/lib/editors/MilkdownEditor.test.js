@@ -7,10 +7,13 @@ import { attachments } from '../api/misc.js';
 // listener callbacks so teardown behavior can be asserted.
 const h = vi.hoisted(() => {
 	const state = { chain: null, deferred: null };
-	const listeners = { markdownUpdated: null, updated: null };
+	const listeners = { markdownUpdated: null, updated: null, selectionUpdated: null };
+	// Milkdown exposes the listener plugin context with both the registration
+	// methods and the live listener arrays teardown clears.
 	const ctx = {
 		set: () => {},
 		update: () => {},
+		isInjected: () => true,
 		get: () => ({
 			markdownUpdated: (cb) => {
 				listeners.markdownUpdated = cb;
@@ -18,6 +21,10 @@ const h = vi.hoisted(() => {
 			updated: (cb) => {
 				listeners.updated = cb;
 			},
+			selectionUpdated: (cb) => {
+				listeners.selectionUpdated = cb;
+			},
+			listeners: { markdownUpdated: [], updated: [] },
 		}),
 	};
 
@@ -71,7 +78,18 @@ vi.mock("@milkdown/kit/preset/gfm", () => ({
 vi.mock("@milkdown/kit/plugin/listener", () => ({ listener: {}, listenerCtx: Symbol("listener") }));
 vi.mock("@milkdown/kit/plugin/clipboard", () => ({ clipboard: {} }));
 vi.mock("@milkdown/kit/plugin/upload", () => ({ upload: {}, uploadConfig: { key: Symbol("upload") } }));
-vi.mock("@milkdown/kit/utils", () => ({ insert: () => {}, callCommand: () => () => {} }));
+// The task-list plugin (used by the editor) builds its plugin with $prose, so
+// keep the real factory helpers and only stub the ones this file needs.
+vi.mock("@milkdown/kit/utils", async (importOriginal) => {
+	const actual = await importOriginal();
+	return {
+		...actual,
+		insert: () => {},
+		callCommand: () => () => {},
+		$prose: (factory) => ({ plugin: factory }),
+		$command: () => ({ run: () => {} }),
+	};
+});
 vi.mock("@milkdown/utils", () => ({ replaceAll: () => {} }));
 vi.mock("@milkdown/theme-nord", () => ({ nord: {} }));
 vi.mock("@milkdown/kit/component/image-block", () => ({ imageBlockComponent: {} }));
@@ -94,7 +112,10 @@ vi.mock("./code-highlight.js", () => ({ highlightCodeBlocks: () => {} }));
 const { default: MilkdownEditor } = await import("./MilkdownEditor.svelte");
 
 function fakeEditor() {
-	return { destroy: vi.fn().mockResolvedValue(undefined), action: vi.fn() };
+	return {
+		destroy: vi.fn().mockResolvedValue(undefined),
+		action: vi.fn((callback) => callback(h.ctx)),
+	};
 }
 
 describe("MilkdownEditor async creation lifecycle (WI-1613)", () => {

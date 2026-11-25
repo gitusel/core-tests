@@ -504,7 +504,7 @@ func TestBindingService_RunPrivateProfileTestUsesStandardRuntimeWithoutReadiness
 		Lifecycle:       models.AgentLifecycleDraft,
 		ProfileVersion:  6,
 		LLMConnectionID: &llmConnectionID,
-		CreatedByUserID: st.AdminID,
+		CreatedByUserID: ptrInt(st.AdminID),
 	})
 	if err != nil {
 		t.Fatalf("seed Standard Draft: %v", err)

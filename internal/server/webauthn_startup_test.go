@@ -18,7 +18,7 @@ func TestInitializeWebAuthnConfigsDisablesUnsupportedLocalRPID(t *testing.T) {
 	}{
 		{name: "single-label homelab service", rpID: "windshift", wantActive: false},
 		{name: "localhost", rpID: "localhost", wantActive: true},
-		{name: "local IP", rpID: "192.0.2.10", wantActive: true},
+		{name: "local IP is not a valid relying-party domain", rpID: "192.0.2.10", wantActive: false},
 		{name: "dotted homelab name", rpID: "windshift.home.arpa", wantActive: true},
 		{name: "public domain", rpID: "windshift.example.com", wantActive: true},
 	}

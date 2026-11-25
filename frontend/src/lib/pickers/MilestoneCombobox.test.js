@@ -35,7 +35,7 @@ const mocks = vi.hoisted(() => {
   };
 });
 
-vi.mock('../api/milestones.js', () => ({
+vi.mock('../api/planning.js', () => ({
   milestones: { getAll: mocks.getAll, create: mocks.create },
   milestoneCategories: {},
 }));
@@ -68,7 +68,7 @@ vi.mock('../stores/toasts.svelte.js', () => ({
 
 import { milestonesStore } from '../stores/milestones.js';
 import MilestoneCombobox from './MilestoneCombobox.svelte';
-import { milestoneCategories, milestones } from '../api/milestones.js';
+import { milestoneCategories, milestones } from '../api/planning.js';
 
 const { canAdminWorkspace, create, getAll, hasPermission, permissionStore } = mocks;
 

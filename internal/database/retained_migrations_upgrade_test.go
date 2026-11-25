@@ -557,16 +557,41 @@ func TestCompactCatalogContainsExactlyRetainedMigrations(t *testing.T) {
 		"20261128_items_active_list_indexes",
 		"20261129_items_workspace_activity_index",
 		"20261130_screen_field_placement",
-		"20261117_intake_graph_delta",
 		"20261201_drop_redundant_item_key_indexes",
 		"20261202_drop_unique_covered_indexes",
+		"20261203_priorities_single_default",
+		"20261204_email_sender_authentication",
+		"20261205_email_reply_keys",
+		"20261205_postgres_schema_authority",
+		"20261206_agent_binding_creator_nullable",
+		"20261206_email_reply_key_marker",
+		"20261207_board_configuration_ownership",
+		"20261208_item_type_membership_authority",
+		"20261209_notification_setting_unique",
+		"20261210_email_reply_outbox_pending_index",
 	}
-	if len(database.Catalog) != len(want) {
-		t.Fatalf("catalog length = %d, want %d", len(database.Catalog), len(want))
+
+	// A fork may carry migrations that upstream has not merged yet. They must
+	// append after the upstream catalog, never interleave with it: an install
+	// that already stamped upstream versions has to keep that order. Any other
+	// tail is a catalog edit that needs its own review.
+	forkOnly := []string{"20261117_intake_graph_delta"}
+
+	if len(database.Catalog) < len(want) {
+		t.Fatalf("catalog length = %d, want at least %d", len(database.Catalog), len(want))
 	}
 	for i, version := range want {
 		if database.Catalog[i].Version != version {
 			t.Fatalf("catalog[%d] = %q, want %q", i, database.Catalog[i].Version, version)
+		}
+	}
+	tail := database.Catalog[len(want):]
+	if len(tail) > len(forkOnly) {
+		t.Fatalf("catalog has %d migrations beyond the upstream set, want at most %d (%v)", len(tail), len(forkOnly), forkOnly)
+	}
+	for i, migration := range tail {
+		if migration.Version != forkOnly[i] {
+			t.Fatalf("fork migration[%d] = %q, want %q", i, migration.Version, forkOnly[i])
 		}
 	}
 }

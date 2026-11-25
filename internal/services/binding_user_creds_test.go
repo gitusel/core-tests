@@ -44,7 +44,7 @@ func seedRepoBackedBinding(t *testing.T, st *bindingTestStack, targetPoolID *int
 		SCMConnectionID: &scmConn,
 		TargetPoolID:    targetPoolID,
 		TokenTTLMinutes: 15,
-		CreatedByUserID: st.AdminID,
+		CreatedByUserID: ptrInt(st.AdminID),
 	})
 	if err != nil {
 		t.Fatalf("seed binding: %v", err)

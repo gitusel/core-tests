@@ -44,7 +44,9 @@ const initialItem = { id: 1, title: 'Recent item', workspace_name: 'Home' };
 
 async function openPicker() {
   render(TimeLogModal, { props: { showProjectField: false, workItems: [initialItem] } });
-  const input = screen.getByRole('combobox');
+  // The work-item picker is one of several comboboxes (time/date fields use
+  // the combobox role too), so identify it by its stable id.
+  const input = document.getElementById('time-log-work-item');
   await fireEvent.click(input);
   return input;
 }

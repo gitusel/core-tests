@@ -29,7 +29,7 @@ func TestClientGetWorkspacesLoadsEveryPage(t *testing.T) {
 	}))
 	t.Cleanup(server.Close)
 
-	client := NewClient(server.URL)
+	client := NewClient(server.URL, server.Client())
 	workspaces, err := client.getWorkspaces()
 	if err != nil {
 		t.Fatalf("getWorkspaces: %v", err)
@@ -52,7 +52,7 @@ func TestClientGetWorkspacesDoesNotReturnPartialResults(t *testing.T) {
 	}))
 	t.Cleanup(server.Close)
 
-	client := NewClient(server.URL)
+	client := NewClient(server.URL, server.Client())
 	workspaces, err := client.getWorkspaces()
 	if err == nil || workspaces != nil {
 		t.Fatalf("getWorkspaces = (%+v, %v), want nil results and an error", workspaces, err)

@@ -22,23 +22,23 @@ import WorkspaceForm from './WorkspaceForm.svelte';
 
 describe('WorkspaceForm restricted-to-creator checkbox', () => {
   it('defaults to open and includes restricted_to_creator in the create payload', async () => {
-    const { component } = render(WorkspaceForm, {
-      props: { formData: { name: 'Locked', key: 'LOCK', description: '', restricted_to_creator: false } },
-    });
+    // The form mutates the bindable formData object it is handed; the parent
+    // owns the payload.
+    const formData = { name: 'Locked', key: 'LOCK', description: '', restricted_to_creator: false };
+    render(WorkspaceForm, { props: { formData } });
 
     const checkbox = screen.getByTestId('workspace-restrict-checkbox');
     expect(checkbox).toHaveTextContent('Restrict visibility');
-    expect(component.getFormData().restricted_to_creator).toBe(false);
+    expect(formData.restricted_to_creator).toBe(false);
 
     await fireEvent.click(checkbox.querySelector('input'));
-    expect(component.getFormData().restricted_to_creator).toBe(true);
+    expect(formData.restricted_to_creator).toBe(true);
   });
 
   it('keeps the payload false when the checkbox is left untouched', () => {
-    const { component } = render(WorkspaceForm, {
-      props: { formData: { name: 'Open', key: 'OPEN', description: '', restricted_to_creator: false } },
-    });
+    const formData = { name: 'Open', key: 'OPEN', description: '', restricted_to_creator: false };
+    render(WorkspaceForm, { props: { formData } });
 
-    expect(component.getFormData().restricted_to_creator).toBe(false);
+    expect(formData.restricted_to_creator).toBe(false);
   });
 });

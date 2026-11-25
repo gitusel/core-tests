@@ -49,7 +49,7 @@ func TestBindingService_StartTestRun_Guards(t *testing.T) {
 	}
 	repoBindingID, err := st.Bindings.Insert(ctx, &models.WorkspaceAgentBinding{
 		WorkspaceID: 1, ActingUserID: st.SvcUserID, ActingUserKind: ActingIdentityKindAgent,
-		RepoSlug: "acme/widget", SCMConnectionID: &scmConn, TokenTTLMinutes: 15, CreatedByUserID: st.AdminID,
+		RepoSlug: "acme/widget", SCMConnectionID: &scmConn, TokenTTLMinutes: 15, CreatedByUserID: ptrInt(st.AdminID),
 	})
 	if err != nil {
 		t.Fatalf("seed repo binding: %v", err)

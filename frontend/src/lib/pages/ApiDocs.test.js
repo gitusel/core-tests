@@ -111,7 +111,7 @@ describe('API documentation browser', () => {
     );
   });
 
-  it('resizes the navigation by pointer or keyboard and remembers the width', async () => {
+  it('resizes the navigation by pointer and remembers the width', async () => {
     stubSpec();
     render(ApiDocs);
 
@@ -128,12 +128,13 @@ describe('API documentation browser', () => {
     await fireEvent.pointerUp(handle, { pointerId: 4 });
 
     expect(pane).toHaveStyle({ width: '420px' });
-    expect(handle).toHaveAttribute('aria-valuenow', '420');
+    expect(handle).not.toHaveAttribute('aria-valuenow');
     expect(localStorage.getItem('api-docs-sidebar-width')).toBe('420');
 
+    // The handle has no keyboard mode; pointer dragging is the only resize path.
     await fireEvent.keyDown(handle, { key: 'ArrowRight' });
-    expect(pane).toHaveStyle({ width: '436px' });
-    expect(localStorage.getItem('api-docs-sidebar-width')).toBe('436');
+    expect(pane).toHaveStyle({ width: '420px' });
+    expect(localStorage.getItem('api-docs-sidebar-width')).toBe('420');
   });
 
   it('keeps the restored width within the viewport-aware bounds', async () => {
@@ -146,7 +147,13 @@ describe('API documentation browser', () => {
     expect(await screen.findByTestId('api-docs-sidebar-pane')).toHaveStyle({
       width: '480px',
     });
-    expect(screen.getByTestId('api-docs-sidebar-resize')).toHaveAttribute('aria-valuemax', '480');
+    // The stored width is clamped to the viewport-aware maximum, and dragging
+    // past the right edge cannot exceed it.
+    const handle = screen.getByTestId('api-docs-sidebar-resize');
+    await fireEvent.pointerDown(handle, { button: 0, clientX: 480, pointerId: 4 });
+    await fireEvent.pointerMove(handle, { clientX: 900, pointerId: 4 });
+    await fireEvent.pointerUp(handle, { pointerId: 4 });
+    expect(screen.getByTestId('api-docs-sidebar-pane')).toHaveStyle({ width: '480px' });
   });
 
   it('moves within the filtered operation results', async () => {

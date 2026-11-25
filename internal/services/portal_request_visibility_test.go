@@ -78,7 +78,7 @@ func TestPortalRequestVisibilityForLinkedIntakes(t *testing.T) {
 
 	// Ownership mirrors the listing: the linked-intake ticket is readable and
 	// commentable through the portal; the hidden ones are 404-material.
-	if ok, err := service.VerifyRequestOwnership(ctx, linkedTicket, portalChannelID, nil, &customerID); err != nil || !ok {
+	if ok, err := service.VerifyRequestEngagement(ctx, linkedTicket, portalChannelID, nil, &customerID); err != nil || !ok {
 		t.Fatalf("linked-intake ticket ownership = %v, %v; want true, nil", ok, err)
 	}
 	for hidden, why := range map[int]string{
@@ -87,7 +87,7 @@ func TestPortalRequestVisibilityForLinkedIntakes(t *testing.T) {
 		internalTicket:       "internal intake",
 		wrongWorkspaceTicket: "item outside served workspaces",
 	} {
-		if ok, err := service.VerifyRequestOwnership(ctx, hidden, portalChannelID, nil, &customerID); err != nil || ok {
+		if ok, err := service.VerifyRequestEngagement(ctx, hidden, portalChannelID, nil, &customerID); err != nil || ok {
 			t.Fatalf("hidden ticket %d ownership = %v, %v; want false, nil (%s)", hidden, ok, err, why)
 		}
 	}
@@ -95,7 +95,7 @@ func TestPortalRequestVisibilityForLinkedIntakes(t *testing.T) {
 	// Ownership still requires the caller to be the creator: another customer
 	// cannot read the linked-intake ticket through this portal.
 	otherCustomerID := insertVisibilityCustomer(t, db, "Other", "other-vis@example.com")
-	if ok, err := service.VerifyRequestOwnership(ctx, linkedTicket, portalChannelID, nil, &otherCustomerID); err != nil || ok {
+	if ok, err := service.VerifyRequestEngagement(ctx, linkedTicket, portalChannelID, nil, &otherCustomerID); err != nil || ok {
 		t.Fatalf("other-customer ownership = %v, %v; want false, nil", ok, err)
 	}
 }
@@ -142,10 +142,10 @@ func TestPortalRequestVisibilityIgnoresLegacyMailboxPortalLink(t *testing.T) {
 		t.Fatalf("internal-intake ticket %d leaked into the portal via the legacy mailbox link", internalTicket)
 	}
 
-	if ok, err := service.VerifyRequestOwnership(ctx, portalTicket, portalChannelID, nil, &customerID); err != nil || !ok {
+	if ok, err := service.VerifyRequestEngagement(ctx, portalTicket, portalChannelID, nil, &customerID); err != nil || !ok {
 		t.Fatalf("portal-intake ownership = %v, %v; want true, nil", ok, err)
 	}
-	if ok, err := service.VerifyRequestOwnership(ctx, internalTicket, portalChannelID, nil, &customerID); err != nil || ok {
+	if ok, err := service.VerifyRequestEngagement(ctx, internalTicket, portalChannelID, nil, &customerID); err != nil || ok {
 		t.Fatalf("internal-intake ownership = %v, %v; want false, nil", ok, err)
 	}
 }

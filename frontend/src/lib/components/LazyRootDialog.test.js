@@ -25,10 +25,12 @@ describe('LazyRootDialog', () => {
     expect(loadingState.querySelector('[aria-label="Loading..."]').getAttribute('style')).toContain(
       'border-color: var(--ds-interactive)'
     );
-    expect(screen.getByRole('dialog')).toHaveAttribute(
-      'aria-labelledby',
-      'root-dialog-loading-label'
-    );
+    // The dialog is labelled by the loading text itself; the id is generated
+    // per instance, so resolve it instead of hardcoding one.
+    const dialog = screen.getByRole('dialog');
+    const labelId = dialog.getAttribute('aria-labelledby');
+    expect(labelId).toBeTruthy();
+    expect(document.getElementById(labelId)).toHaveTextContent('Loading...');
   });
 
   it('forwards callback props and the bindable open state', async () => {

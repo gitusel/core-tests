@@ -58,6 +58,12 @@ func TestPauseAfterDeadlineRecordsOriginalBreach(t *testing.T) {
 	if effects.breaches != 1 {
 		t.Fatalf("breach side effects = %d, want 1 recorded before the pause", effects.breaches)
 	}
+	if !effects.lastBreach.deadline.Equal(*breachedAt) {
+		t.Fatalf("emitted breach deadline = %v, want the recorded breach instant %v", effects.lastBreach.deadline, *breachedAt)
+	}
+	if effects.lastBreach.workspaceID != fixture.workspaceID {
+		t.Fatalf("emitted breach workspace id = %d, want %d", effects.lastBreach.workspaceID, fixture.workspaceID)
+	}
 	if events := cycleEventCount(t, fixture, cycleID, "sla.breached"); events != 1 {
 		t.Fatalf("sla.breached lifecycle events = %d, want 1", events)
 	}
@@ -85,6 +91,12 @@ func TestPauseAfterDeadlineRecordsOriginalBreach(t *testing.T) {
 	}
 	if effects.breaches != 1 {
 		t.Fatalf("breach side effects = %d, want exactly 1 for the original breach", effects.breaches)
+	}
+	if !effects.lastBreach.deadline.Equal(*breachedAt) {
+		t.Fatalf("emitted breach deadline = %v, want the original breach instant %v", effects.lastBreach.deadline, *breachedAt)
+	}
+	if effects.lastBreach.workspaceID != fixture.workspaceID {
+		t.Fatalf("emitted breach workspace id = %d, want %d", effects.lastBreach.workspaceID, fixture.workspaceID)
 	}
 }
 
@@ -141,6 +153,12 @@ func TestReGoalAfterDeadlineRecordsOriginalBreach(t *testing.T) {
 	}
 	if effects.breaches != 1 {
 		t.Fatalf("breach side effects = %d, want 1 recorded before the re-goal", effects.breaches)
+	}
+	if !effects.lastBreach.deadline.Equal(*breachedAt) {
+		t.Fatalf("emitted breach deadline = %v, want the recorded breach instant %v", effects.lastBreach.deadline, *breachedAt)
+	}
+	if effects.lastBreach.workspaceID != fixture.workspaceID {
+		t.Fatalf("emitted breach workspace id = %d, want %d", effects.lastBreach.workspaceID, fixture.workspaceID)
 	}
 	if events := cycleEventCount(t, fixture, cycleID, "sla.breached"); events != 1 {
 		t.Fatalf("sla.breached lifecycle events = %d, want 1", events)

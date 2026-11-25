@@ -1,11 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { configurationSets, itemTemplates, screens } from '../api/configuration.js';
+import { configurationSets, customFields, itemTemplates, screens } from '../api/configuration.js';
 import { workspaces } from '../api/workspaces.js';
 
 
 
 vi.mock('../api/configuration.js', () => ({
   screens: { getFields: vi.fn() },
+  customFields: { getAll: vi.fn() },
   itemTemplates: { getAll: vi.fn() },
   configurationSets: { getAll: vi.fn(), get: vi.fn() },
 }))
@@ -42,8 +43,9 @@ describe('workItemFormStore custom field values across screen loads', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     workItemFormStore.reset();
-    workItemFormStore.allCustomFields = [ASSET_FIELD, TEXT_FIELD, LINKING_FIELD];
-    workItemFormStore.customFieldsLoaded = true;
+    // loadScreenFieldsForItemType projects the loaded definitions through the
+    // screen's custom-field ids, so the definitions come from the catalog.
+    customFields.getAll.mockResolvedValue([ASSET_FIELD, TEXT_FIELD, MULTISELECT_FIELD, LINKING_FIELD]);
     workItemFormStore.currentConfigSet = {
       create_screen_id: 5,
       edit_screen_id: 5,
@@ -81,7 +83,7 @@ describe('workItemFormStore custom field values across screen loads', () => {
   });
 
   it('initializes an untouched multiselect as an array, not a string', async () => {
-    workItemFormStore.allCustomFields = [MULTISELECT_FIELD];
+    customFields.getAll.mockResolvedValue([MULTISELECT_FIELD]);
     screens.getFields.mockResolvedValue(screenFieldsFor([12]));
 
     await workItemFormStore.loadScreenFieldsForItemType(6, 1);

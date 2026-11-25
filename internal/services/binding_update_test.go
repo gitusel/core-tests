@@ -23,7 +23,7 @@ func TestBindingService_UpdateBinding(t *testing.T) {
 	bindingID, err := st.Bindings.Insert(ctx, &models.WorkspaceAgentBinding{
 		WorkspaceID: 1, ActingUserID: st.AgentID, ActingUserKind: ActingIdentityKindAgent,
 		TargetPoolID: &poolID, LLMConnectionID: &llm, TokenTTLMinutes: 30, MaxRunsPerDay: 2,
-		Instructions: "old", TokenScopes: []string{"items:read"}, CreatedByUserID: st.AdminID,
+		Instructions: "old", TokenScopes: []string{"items:read"}, CreatedByUserID: ptrInt(st.AdminID),
 		Repos: []models.BindingRepo{{SCMConnectionID: &conn, RepoSlug: "acme/old", IsPrimary: true}},
 	})
 	if err != nil {
@@ -71,7 +71,7 @@ func TestBindingService_UpdateBinding_Validation(t *testing.T) {
 
 	bindingID, err := st.Bindings.Insert(ctx, &models.WorkspaceAgentBinding{
 		WorkspaceID: 1, ActingUserID: st.AgentID, ActingUserKind: ActingIdentityKindAgent,
-		LLMConnectionID: &llm, TokenTTLMinutes: 30, CreatedByUserID: st.AdminID,
+		LLMConnectionID: &llm, TokenTTLMinutes: 30, CreatedByUserID: ptrInt(st.AdminID),
 	})
 	if err != nil {
 		t.Fatalf("seed binding: %v", err)
@@ -124,7 +124,7 @@ func TestBindingService_UpdateBinding_ReplacesStandardCapabilityGroups(t *testin
 		LLMConnectionID:  &llm,
 		TokenTTLMinutes:  60,
 		Instructions:     "Keep this prompt.",
-		CreatedByUserID:  st.AdminID,
+		CreatedByUserID:  ptrInt(st.AdminID),
 		CapabilityGroups: []string{"comment_editing"},
 	})
 	if err != nil {
@@ -178,7 +178,7 @@ func TestBindingService_MigrateLegacyToRunner(t *testing.T) {
 		LLMConnectionID: &llm,
 		TokenTTLMinutes: 60,
 		Instructions:    "Keep this profile and its history.",
-		CreatedByUserID: st.AdminID,
+		CreatedByUserID: ptrInt(st.AdminID),
 	})
 	if err != nil {
 		t.Fatalf("seed Legacy binding: %v", err)
@@ -219,7 +219,7 @@ func TestBindingService_ConnectCodingRunnerIsFirstAssignmentOnly(t *testing.T) {
 		Lifecycle:       models.AgentLifecycleDraft,
 		ProfileVersion:  2,
 		LLMConnectionID: &llm,
-		CreatedByUserID: st.AdminID,
+		CreatedByUserID: ptrInt(st.AdminID),
 	})
 	if err != nil {
 		t.Fatalf("seed Coding Draft: %v", err)

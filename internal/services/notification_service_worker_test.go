@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"windshift/internal/models"
+	"windshift/internal/sideeffects"
 )
 
 type recordingNotificationManager struct {
@@ -37,29 +38,45 @@ func (m *recordingNotificationManager) MarkNotificationsSent([]int) error       
 func (m *recordingNotificationManager) MarkNotificationsSendFailed([]int) error { return nil }
 func (m *recordingNotificationManager) RollbackNotificationsSent([]int) error   { return nil }
 
+// newNotificationWorkerHarness builds a NotificationService whose delivery
+// lane is the production bounded lane (sideeffects.Lane) with a test process
+// hook. capacity bounds active+queued candidates, exactly as
+// NotificationServiceConfig.EventBufferSize does in production.
 func newNotificationWorkerHarness(
-	workers, queueSize int,
+	t *testing.T,
+	workers, capacity int,
 	process func(context.Context, *NotificationEvent) error,
 ) *NotificationService {
-	workerCtx, workerCancel := context.WithCancel(context.Background())
+	t.Helper()
 	service := &NotificationService{
 		config: NotificationServiceConfig{
 			EventWorkers:        workers,
-			EventBufferSize:     queueSize,
+			EventBufferSize:     capacity,
+			EventBufferBytes:    1 << 20,
 			EventProcessTimeout: time.Hour,
+			MaxPayloadBytes:     256 << 10,
+			MaxEventAge:         time.Hour,
 			ShutdownTimeout:     time.Second,
 		},
-		eventChan:      make(chan queuedNotificationEvent, queueSize),
 		cacheStop:      make(chan struct{}),
 		ruleCache:      &RuleCache{LastRefreshed: time.Now()},
-		workerCtx:      workerCtx,
-		workerCancel:   workerCancel,
 		processEventFn: process,
 	}
-	service.wg.Add(workers)
-	for workerID := 0; workerID < workers; workerID++ {
-		go service.eventProcessor(workerID)
+	lane, err := sideeffects.NewLane(sideeffects.LaneConfig{
+		Name:             "notifications-test",
+		Capacity:         capacity,
+		ByteCapacity:     1 << 20,
+		MaxPayloadBytes:  256 << 10,
+		MaxEventAge:      time.Hour,
+		Workers:          workers,
+		ExecutionTimeout: time.Hour,
+		Handler:          sideeffects.HandlerFunc(service.handleLaneCandidate),
+	})
+	if err != nil {
+		t.Fatalf("create notification lane: %v", err)
 	}
+	service.lane = lane
+	lane.Start(context.Background())
 	return service
 }
 
@@ -83,9 +100,10 @@ func TestNotificationServiceBoundsQueueAndWorkerConcurrency(t *testing.T) {
 		active.Add(-1)
 		return nil
 	}
-	service := newNotificationWorkerHarness(2, 2, process)
+	// Two workers plus two queued candidates, so four fit in the lane.
+	service := newNotificationWorkerHarness(t, 2, 4, process)
 
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		if !service.TryEmitEvent(&NotificationEvent{EventType: "test"}) {
 			t.Fatal("initial event rejected")
 		}
@@ -130,7 +148,11 @@ func TestNotificationServiceNotifyUsersUsesOneRecipientBatch(t *testing.T) {
 	}
 }
 
-func TestNotificationServiceShutdownDeadlineReportsUndrainedWork(t *testing.T) {
+// TestNotificationServiceShutdownDiscardsUndrainedWork pins the bounded-lane
+// shutdown contract: when the caller's deadline expires before the lane drains,
+// the active handler is canceled, the still-queued candidate is discarded (and
+// counted), and no worker remains active.
+func TestNotificationServiceShutdownDiscardsUndrainedWork(t *testing.T) {
 	started := make(chan struct{})
 	var once sync.Once
 	process := func(ctx context.Context, _ *NotificationEvent) error {
@@ -138,20 +160,19 @@ func TestNotificationServiceShutdownDeadlineReportsUndrainedWork(t *testing.T) {
 		<-ctx.Done()
 		return ctx.Err()
 	}
-	service := newNotificationWorkerHarness(1, 2, process)
+	service := newNotificationWorkerHarness(t, 1, 2, process)
 	service.TryEmitEvent(&NotificationEvent{EventType: "active"})
 	service.TryEmitEvent(&NotificationEvent{EventType: "queued"})
 	<-started
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
 	defer cancel()
-	if err := service.CloseContext(ctx); err == nil {
-		t.Fatal("shutdown deadline returned nil")
-	}
-	deadline := time.Now().Add(time.Second)
-	for time.Now().Before(deadline) && service.GetStats()["active_workers"] != 0 {
-		<-time.After(time.Millisecond)
+	if err := service.CloseContext(ctx); err != nil {
+		t.Fatalf("close notification service: %v", err)
 	}
 	if active := service.GetStats()["active_workers"]; active != 0 {
 		t.Fatalf("active workers after cancellation = %d", active)
+	}
+	if discarded := service.lane.Stats().ShutdownDiscarded; discarded != 1 {
+		t.Fatalf("shutdown discarded = %d, want the one undrained queued event", discarded)
 	}
 }

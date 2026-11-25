@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({ getAll: vi.fn() }));
 
-vi.mock('../../api/milestones.js', () => ({
+vi.mock('../../api/planning.js', () => ({
   milestones: { getAll: mocks.getAll },
   iterations: { getAll: mocks.getAll },
   milestoneCategories: { getAll: async () => [] },
@@ -11,7 +11,12 @@ vi.mock('../../api/milestones.js', () => ({
 }))
 
 vi.mock('../../api/workspaces.js', () => ({
-  workspaces: { getAll: async () => [] },
+  // The workspace directory is paged now; Milestones resolves its picker
+  // options through workspacesStore, which reads one directory page.
+  workspaces: {
+    getPage: async () => ({ data: [], pagination: { total: 0 } }),
+    getAll: async () => [],
+  },
 }))
 
 vi.mock('../../api/admin.js', () => ({
@@ -53,7 +58,7 @@ vi.mock("../../stores/i18n.svelte.js", () => ({ t: (key) => key }));
 import { milestonesStore } from "../../stores/milestones.js";
 import Iterations from "../iterations/Iterations.svelte";
 import Milestones from "./Milestones.svelte";
-import { iterationTypes, iterations, milestoneCategories, milestones } from '../../api/milestones.js';
+import { iterationTypes, iterations, milestoneCategories, milestones } from '../../api/planning.js';
 import { workspaces } from '../../api/workspaces.js';
 import { setup } from '../../api/admin.js';
 
@@ -86,7 +91,7 @@ describe("milestones list scope", () => {
 		render(Milestones);
 		await screen.findByText("Shared release");
 		expect(screen.getByText("Workspace release")).toBeInTheDocument();
-		expect(mocks.getAll).toHaveBeenCalledWith({});
+		expect(mocks.getAll.mock.calls[0][0]).toEqual({});
 	});
 
 	it("includes local and global entries in a workspace", async () => {
@@ -94,10 +99,12 @@ describe("milestones list scope", () => {
 		await screen.findByText("Workspace release");
 		expect(screen.getByText("Shared release")).toBeInTheDocument();
 		await waitFor(() =>
-			expect(mocks.getAll).toHaveBeenCalledWith({
-				workspace_id: 23,
-				include_global: true,
-			}),
+			expect(
+				mocks.getAll.mock.calls.some(
+					([filters]) =>
+						filters?.workspace_id === 23 && filters?.include_global === true,
+				),
+			).toBe(true),
 		);
 	});
 });
@@ -107,7 +114,7 @@ describe("iterations list scope", () => {
 		render(Iterations);
 		await screen.findByText("Shared release");
 		expect(screen.queryByText("Workspace release")).not.toBeInTheDocument();
-		expect(mocks.getAll).toHaveBeenCalledWith({ is_global: true });
+		expect(mocks.getAll.mock.calls[0][0]).toEqual({ is_global: true });
 	});
 
 	it("includes local and global entries in a workspace", async () => {
@@ -115,10 +122,12 @@ describe("iterations list scope", () => {
 		await screen.findByText("Workspace release");
 		expect(screen.getByText("Shared release")).toBeInTheDocument();
 		await waitFor(() =>
-			expect(mocks.getAll).toHaveBeenCalledWith({
-				workspace_id: 23,
-				include_global: true,
-			}),
+			expect(
+				mocks.getAll.mock.calls.some(
+					([filters]) =>
+						filters?.workspace_id === 23 && filters?.include_global === true,
+				),
+			).toBe(true),
 		);
 	});
 });

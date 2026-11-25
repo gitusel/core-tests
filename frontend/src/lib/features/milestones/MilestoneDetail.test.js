@@ -1,7 +1,7 @@
 import { cleanup, render, screen, within } from '@testing-library/svelte';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 
-vi.mock('../../api/milestones.js', () => ({
+vi.mock('../../api/planning.js', () => ({
   milestoneCategories: { getAll: vi.fn().mockResolvedValue([]) },
   milestones: {
     getProgress: vi.fn(),
@@ -47,7 +47,7 @@ vi.mock('../../stores/milestones.js', () => ({
 
 vi.mock('../../composables/useConfirm.js', () => ({ confirm: vi.fn() }));
 
-import { milestones } from '../../api/milestones.js';
+import { milestones } from '../../api/planning.js';
 import { formatDateShort } from '../../utils/dateFormatter.js';
 import MilestoneDetail from './MilestoneDetail.svelte';
 

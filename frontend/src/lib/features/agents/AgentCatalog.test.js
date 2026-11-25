@@ -82,7 +82,10 @@ describe('AgentCatalog', () => {
     render(AgentCatalog, { props: { workspaceId: 7 } });
 
     const card = await screen.findByTestId('agent-catalog-card');
-    expect(agentBindings.listCatalog).toHaveBeenCalledWith(7);
+    expect(agentBindings.listCatalog).toHaveBeenCalledWith(
+      7,
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
     expect(card).toHaveAttribute('href', '/workspaces/7/agents/42');
     expect(screen.getByText('Workspace Guide')).toBeInTheDocument();
     expect(screen.getByText('gpt-example')).toBeInTheDocument();

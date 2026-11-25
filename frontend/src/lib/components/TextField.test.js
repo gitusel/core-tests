@@ -19,7 +19,10 @@ test('marks the field required without requiring the input', () => {
   render(TextField, { props: { label: 'Name', id: 'name', requiredMark: true } });
 
   expect(screen.getByText(/Name/).textContent).toContain('*');
-  expect(screen.getByLabelText(/Name/)).not.toBeRequired();
+  const input = screen.getByLabelText(/Name/);
+  // The marker is visual/assistive only: no native constraint, just aria-required.
+  expect(input).not.toHaveAttribute('required');
+  expect(input).toHaveAttribute('aria-required', 'true');
 });
 
 test('sets the required attribute when required', () => {

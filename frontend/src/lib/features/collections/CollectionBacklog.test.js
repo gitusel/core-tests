@@ -55,7 +55,7 @@ vi.mock('../../api/configuration.js', () => ({
   screens: { getAllWithFields: vi.fn().mockResolvedValue([]) },
 }))
 
-vi.mock('../../api/milestones.js', () => ({
+vi.mock('../../api/planning.js', () => ({
   iterations: { getAll: vi.fn().mockResolvedValue([]) },
   milestoneCategories: { getAll: vi.fn().mockResolvedValue([]) },
 }));
@@ -98,7 +98,7 @@ vi.mock(
 import CollectionBacklog from "./CollectionBacklog.svelte";
 import { scheduleCollectionReconciliation } from "../../stores/collectionContext.js";
 import { screens } from '../../api/configuration.js';
-import { iterations } from '../../api/milestones.js';
+import { iterations } from '../../api/planning.js';
 import { collectionPreferences } from '../../stores/collectionPreferences.svelte.js';
 
 beforeEach(() => {

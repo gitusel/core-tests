@@ -134,6 +134,17 @@ func newSCIMTestHandler(t *testing.T) (*SCIMHandler, database.Database) {
 		// Minimal shape for the SCIM cascade: deprovisioning disables the
 		// user's Todoist sync configs alongside agents, tokens, and the
 		// personal workspace.
+		// Deprovisioning also revokes calendar feed tokens, which are long-lived
+		// bearer credentials (WI-2193).
+		`CREATE TABLE calendar_feed_tokens (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id INTEGER NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+			token TEXT NOT NULL UNIQUE,
+			is_active BOOLEAN DEFAULT true,
+			last_accessed_at DATETIME,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`,
 		`CREATE TABLE todoist_sync_config (
 			id TEXT PRIMARY KEY,
 			user_id TEXT NOT NULL,

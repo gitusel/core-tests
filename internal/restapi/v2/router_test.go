@@ -545,14 +545,27 @@ func (fakeTimeProjects) RemoveMember(services.AuditActor, int, int) error { retu
 
 type fakeTimers struct{}
 
-func (fakeTimers) StartTimer(int, int, int, *int, string) (*models.ActiveTimer, error) {
+func (fakeTimers) StartTimer(int, int, *int, *int, string) (*models.ActiveTimer, error) {
 	return &models.ActiveTimer{ID: 1}, nil
 }
 func (fakeTimers) GetActiveForUser(int) (*models.ActiveTimer, error) {
 	return nil, repository.ErrNotFound
 }
-func (fakeTimers) StopActiveForUser(int) (*services.StopResult, error) {
+func (fakeTimers) StopActiveTimer(int, *int) (*services.StopResult, error) {
 	return &services.StopResult{TimerID: 1}, nil
+}
+func (fakeTimers) ListDrafts(int) ([]models.TimeWorklogDraft, error) {
+	return []models.TimeWorklogDraft{}, nil
+}
+func (fakeTimers) GetDraft(int, int) (*models.TimeWorklogDraft, error) {
+	return &models.TimeWorklogDraft{ID: 1, Version: 1}, nil
+}
+func (fakeTimers) UpdateDraft(_, _, expectedVersion int, _ services.WorklogMutationInput) (*models.TimeWorklogDraft, error) {
+	return &models.TimeWorklogDraft{ID: 1, Version: expectedVersion + 1}, nil
+}
+func (fakeTimers) DeleteDraft(int, int) error { return nil }
+func (fakeTimers) BookDraft(_, _, _ int, _ string, _ services.WorklogMutationInput) (*models.Worklog, error) {
+	return &models.Worklog{ID: 1}, nil
 }
 
 type fakeSystemAdmins struct{}
@@ -607,6 +620,9 @@ func (fakeComments) UserCanReadItemAsApprover(context.Context, int, int) (bool, 
 	return false, nil
 }
 func (fakeComments) Create(services.CreateCommentParams) (*services.CreateCommentResult, error) {
+	return &services.CreateCommentResult{CommentID: 1}, nil
+}
+func (fakeComments) CreateContext(context.Context, services.CreateCommentParams) (*services.CreateCommentResult, error) {
 	return &services.CreateCommentResult{CommentID: 1}, nil
 }
 func (fakeComments) UpdateWithEffects(services.UpdateCommentParams) (*models.Comment, error) {
@@ -673,6 +689,9 @@ func (fakeAttachments) DeleteItemAttachment(context.Context, int, int) error { r
 
 type fakePageAttachments struct{}
 
+func (fakePageAttachments) UploadPolicy() (services.ItemAttachmentUploadPolicy, error) {
+	return services.ItemAttachmentUploadPolicy{Enabled: true, MaxFileSize: 1 << 20}, nil
+}
 func (fakePageAttachments) UploadPageAttachment(context.Context, services.PageAttachmentUploadInput) (models.AttachmentUploadResponse, error) {
 	return models.AttachmentUploadResponse{Attachment: models.Attachment{ID: 1}}, nil
 }
@@ -940,6 +959,12 @@ func (fakeActions) Toggle(int, int, int, services.AuditActor, *bool) (*models.Ac
 }
 func (fakeActions) Logs(int, int, int, int, int) ([]*models.ActionExecutionLog, int, error) {
 	return []*models.ActionExecutionLog{}, 0, nil
+}
+func (fakeActions) ListRevisions(int, int, int, int, int) ([]models.ActionDefinitionRevisionSummary, int, error) {
+	return []models.ActionDefinitionRevisionSummary{}, 0, nil
+}
+func (fakeActions) GetRevision(int, int, int, int) (*models.ActionDefinitionRevision, error) {
+	return &models.ActionDefinitionRevision{ID: 1}, nil
 }
 func (fakeActions) Execute(int, int, int, int) (models.ActionExecutionStatus, error) {
 	return models.ActionStatusCompleted, nil

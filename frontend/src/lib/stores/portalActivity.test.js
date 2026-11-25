@@ -127,7 +127,9 @@ describe('portal activity stores', () => {
       .mockResolvedValueOnce([{ id: 'b', filename: 'b.txt' }]);
 
     const first = portalRequestsStore.loadAndView(1);
-    await Promise.resolve();
+    // Wait for the first detail read to reach its attachment fetch: a bare
+    // microtask tick is no longer enough now that the detail read is awaited.
+    await vi.waitFor(() => expect(mocks.getRequestAttachments).toHaveBeenCalledWith('support', 1));
     await portalRequestsStore.loadAndView(2);
     delayedAttachments.resolve([{ id: 'a', filename: 'a.txt' }]);
     await first;

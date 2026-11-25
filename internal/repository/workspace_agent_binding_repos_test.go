@@ -31,7 +31,7 @@ func TestReplaceBindingRepos_RoundTripAndHydrate(t *testing.T) {
 	conn := seedSCMConnection(t, db, 1)
 
 	id, err := repo.Insert(ctx, &models.WorkspaceAgentBinding{
-		WorkspaceID: 1, ActingUserID: agentA, ActingUserKind: "agent", CreatedByUserID: admin,
+		WorkspaceID: 1, ActingUserID: agentA, ActingUserKind: "agent", CreatedByUserID: intPtr(admin),
 	})
 	if err != nil {
 		t.Fatalf("insert binding: %v", err)
@@ -90,7 +90,7 @@ func TestReplaceBindingRepos_CascadeOnBindingDelete(t *testing.T) {
 	conn := seedSCMConnection(t, db, 1)
 
 	id, err := repo.Insert(ctx, &models.WorkspaceAgentBinding{
-		WorkspaceID: 1, ActingUserID: agentA, ActingUserKind: "agent", CreatedByUserID: admin,
+		WorkspaceID: 1, ActingUserID: agentA, ActingUserKind: "agent", CreatedByUserID: intPtr(admin),
 	})
 	if err != nil {
 		t.Fatalf("insert: %v", err)
@@ -119,7 +119,7 @@ func TestReplaceBindingRepos_RejectsTwoPrimaries(t *testing.T) {
 	conn := seedSCMConnection(t, db, 1)
 
 	id, err := repo.Insert(ctx, &models.WorkspaceAgentBinding{
-		WorkspaceID: 1, ActingUserID: agentA, ActingUserKind: "agent", CreatedByUserID: admin,
+		WorkspaceID: 1, ActingUserID: agentA, ActingUserKind: "agent", CreatedByUserID: intPtr(admin),
 	})
 	if err != nil {
 		t.Fatalf("insert: %v", err)
@@ -142,10 +142,10 @@ func TestListForWorkspace_BatchHydratesRepos(t *testing.T) {
 	conn := seedSCMConnection(t, db, 1)
 
 	idA, _ := repo.Insert(ctx, &models.WorkspaceAgentBinding{
-		WorkspaceID: 1, ActingUserID: agentA, ActingUserKind: "agent", CreatedByUserID: admin,
+		WorkspaceID: 1, ActingUserID: agentA, ActingUserKind: "agent", CreatedByUserID: intPtr(admin),
 	})
 	idB, _ := repo.Insert(ctx, &models.WorkspaceAgentBinding{
-		WorkspaceID: 1, ActingUserID: agentB, ActingUserKind: "agent", CreatedByUserID: admin,
+		WorkspaceID: 1, ActingUserID: agentB, ActingUserKind: "agent", CreatedByUserID: intPtr(admin),
 	})
 	if err := repo.ReplaceBindingRepos(ctx, idA, []models.BindingRepo{
 		{SCMConnectionID: intPtr(conn), RepoSlug: "acme/a1", IsPrimary: true},

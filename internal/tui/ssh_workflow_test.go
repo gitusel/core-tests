@@ -18,15 +18,27 @@ import (
 	wishbubbletea "charm.land/wish/v2/bubbletea"
 	"charm.land/wish/v2/testsession"
 	gossh "golang.org/x/crypto/ssh"
+
+	"windshift/internal/auth"
+	"windshift/internal/testutils"
 )
 
 func TestSSHWorkflowOpensWorkspaceBoardAndQuits(t *testing.T) {
 	api := httptest.NewServer(http.HandlerFunc(serveTUIWorkflowAPI))
 	t.Cleanup(api.Close)
 
+	// The handler needs a token manager to mint the per-connection bearer
+	// token. The testsession below is unauthenticated, so the handler never
+	// reaches the minting path and the API stubs need no auth; the manager
+	// only has to exist.
+	tdb := testutils.CreateTestDB(t, true)
+	t.Cleanup(func() { _ = tdb.Close() })
+	tokenManager := auth.NewTokenManager(tdb.GetDatabase(), nil)
+	t.Cleanup(func() { _ = tokenManager.Close() })
+
 	server, err := wish.NewServer(
 		wish.WithHostKeyPath(t.TempDir()+"/id_ed25519"),
-		wish.WithMiddleware(wishbubbletea.Middleware(NewTUIHandler(api.URL, nil))),
+		wish.WithMiddleware(wishbubbletea.Middleware(NewTUIHandler(api.URL, api.Client(), tokenManager))),
 	)
 	if err != nil {
 		t.Fatalf("create SSH server: %v", err)

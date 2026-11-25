@@ -12,7 +12,7 @@ vi.mock('../api/items.js', () => ({
   items: { getAll: mocks.getItems },
 }))
 
-vi.mock('../api/milestones.js', () => ({
+vi.mock('../api/planning.js', () => ({
   iterations: { getAll: mocks.getIterations },
   milestones: { getAll: mocks.getMilestones },
   milestoneCategories: { getAll: vi.fn().mockResolvedValue([]) },
@@ -51,7 +51,7 @@ import MyTasksWidget from './MyTasksWidget.svelte';
 import OverdueItemsWidget from './OverdueItemsWidget.svelte';
 import UpcomingDeadlinesWidget from './UpcomingDeadlinesWidget.svelte';
 import { items } from '../api/items.js';
-import { iterations, milestones } from '../api/milestones.js';
+import { iterations, milestones } from '../api/planning.js';
 import { statuses } from '../api/workflows.js';
 
 

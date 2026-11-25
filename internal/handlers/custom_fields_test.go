@@ -623,6 +623,13 @@ func TestCustomFieldHandler_Delete_RemovesOnlyDeletedFieldFromLayouts(t *testing
 		}
 	}
 
+	var workspaceID int
+	if err := tdb.QueryRow(`
+		INSERT INTO workspaces (name, key) VALUES ('Custom field deletion', 'CFD') RETURNING id
+	`).Scan(&workspaceID); err != nil {
+		t.Fatalf("insert workspace: %v", err)
+	}
+
 	listColumns := []models.ListColumn{
 		{FieldIdentifier: "key", FieldType: "system", DisplayOrder: 0, Width: 1},
 		{FieldIdentifier: testutils.IntToString(deleted.ID), FieldType: "custom", DisplayOrder: 1, Width: 2},
@@ -652,10 +659,10 @@ func TestCustomFieldHandler_Delete_RemovesOnlyDeletedFieldFromLayouts(t *testing
 	}
 	var boardConfigID int
 	if err := tdb.QueryRow(`
-		INSERT INTO board_configurations (list_columns, card_fields, roadmap_config)
-		VALUES (?, ?, ?)
+		INSERT INTO board_configurations (workspace_id, list_columns, card_fields, roadmap_config)
+		VALUES (?, ?, ?, ?)
 		RETURNING id
-	`, string(listJSON), string(cardJSON), string(roadmapJSON)).Scan(&boardConfigID); err != nil {
+	`, workspaceID, string(listJSON), string(cardJSON), string(roadmapJSON)).Scan(&boardConfigID); err != nil {
 		t.Fatalf("insert board configuration: %v", err)
 	}
 

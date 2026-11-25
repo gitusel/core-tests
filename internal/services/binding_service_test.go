@@ -376,7 +376,7 @@ func TestBindingService_MaybeStartRun_FiresWhenAssigneeMatchesBinding(t *testing
 		ActingUserKind:  ActingIdentityKindAgent,
 		TokenScopes:     []string{"items:read"},
 		TokenTTLMinutes: 15,
-		CreatedByUserID: st.AdminID,
+		CreatedByUserID: ptrInt(st.AdminID),
 	}); err != nil {
 		t.Fatalf("seed binding: %v", err)
 	}
@@ -415,7 +415,7 @@ func TestBindingService_MaybeStartRun_RoutesToRemotePool(t *testing.T) {
 		TargetPoolID:    &pool,
 		TokenScopes:     []string{"items:read"},
 		TokenTTLMinutes: 15,
-		CreatedByUserID: st.AdminID,
+		CreatedByUserID: ptrInt(st.AdminID),
 	}); err != nil {
 		t.Fatalf("seed binding: %v", err)
 	}
@@ -458,7 +458,7 @@ func TestBindingService_MaybeStartRun_NoOpWhenAssigneeUnchanged(t *testing.T) {
 	ctx := context.Background()
 	st := newBindingTestStack(t, true)
 	if _, err := st.Bindings.Insert(ctx, &models.WorkspaceAgentBinding{
-		WorkspaceID: 1, ActingUserID: st.AgentID, ActingUserKind: ActingIdentityKindAgent, CreatedByUserID: st.AdminID,
+		WorkspaceID: 1, ActingUserID: st.AgentID, ActingUserKind: ActingIdentityKindAgent, CreatedByUserID: ptrInt(st.AdminID),
 	}); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
@@ -536,7 +536,7 @@ func TestBindingService_MaybeStartRun_DerivesURLFromSCMConnection(t *testing.T) 
 		RepoSlug:        "acme/widget",
 		SCMConnectionID: &scmConn,
 		TokenTTLMinutes: 15,
-		CreatedByUserID: st.AdminID,
+		CreatedByUserID: ptrInt(st.AdminID),
 	}); err != nil {
 		t.Fatalf("seed binding: %v", err)
 	}
@@ -660,7 +660,7 @@ func TestBindingService_MaybeStartRun_BlockedAtBudget(t *testing.T) {
 		ActingUserID:    st.AgentID,
 		ActingUserKind:  ActingIdentityKindAgent,
 		MaxRunsPerDay:   1,
-		CreatedByUserID: st.AdminID,
+		CreatedByUserID: ptrInt(st.AdminID),
 	}); err != nil {
 		t.Fatalf("seed binding: %v", err)
 	}

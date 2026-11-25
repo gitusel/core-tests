@@ -199,8 +199,9 @@ func TestProcessor_RateLimit_RepliesExempt(t *testing.T) {
 		t.Fatalf("over-cap action = %q, want %q", over.Action, email.ActionRateLimited)
 	}
 
-	// But a reply to the original thread still creates a comment.
-	reply := newTestReplyEmail("<thread-reply@example.com>", originalID, "Thanks, that worked")
+	// But a reply authorized by the request's reply key still creates a comment.
+	keyID := issueReplyKey(t, env, *first.ItemID, "sender@example.com")
+	reply := newTestReplyEmail("<thread-reply@example.com>", keyID, "Thanks, that worked")
 	replyResult, err := env.processor.ProcessEmail(ctx, reply, env.channelID, 7, env.config)
 	if err != nil {
 		t.Fatalf("reply message: %v", err)

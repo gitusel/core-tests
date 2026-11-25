@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/svelte';
+import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { writable } from 'svelte/store';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { items } from '../../api/items.js';
@@ -7,9 +7,10 @@ import { attachments, getDiagrams } from '../../api/misc.js';
 import { time } from '../../api/time.js';
 import { customerOrganisations } from '../../api/portal.js';
 import { workspaces } from '../../api/workspaces.js';
-import { iterations, milestones } from '../../api/milestones.js';
+import { iterations, milestones } from '../../api/planning.js';
 import { requestTypes } from '../../api/channels.js';
 import { actions } from '../../api/actions.js';
+import { timeLogStore } from '../../stores/timeLogStore.svelte.js';
 
 
 
@@ -28,7 +29,7 @@ vi.mock('../../api/items.js', () => ({
         getDetailSummaryByKey: vi.fn(),
         getChildren: vi.fn(),
         getAncestors: vi.fn(),
-        getAll: vi.fn(),
+        getAll: vi.fn().mockResolvedValue({ data: [], pagination: null }),
         getAvailableStatusTransitions: vi.fn(),
         getWatchStatus: vi.fn(),
         update: vi.fn(),
@@ -60,13 +61,18 @@ vi.mock('../../api/misc.js', () => ({
 
 vi.mock('../../api/time.js', () => ({
   time: {
-        projects: { getByWorkspace: vi.fn() },
-        worklogs: { getByItem: vi.fn() },
+        projects: { getByWorkspace: vi.fn(), getAll: vi.fn().mockResolvedValue([]) },
+        worklogs: { getByItem: vi.fn().mockResolvedValue([]) },
       },
 }))
+// The shared time-log surface resolves its picker directory through the
+// workspace store and the item API; keep both offline in this test.
+vi.mock('../../stores/workspaces.svelte.js', () => ({
+  workspacesStore: { load: vi.fn().mockResolvedValue([]) },
+}));
 
 vi.mock('../../api/portal.js', () => ({
-  customerOrganisations: { getAll: vi.fn() },
+  customerOrganisations: { getAll: vi.fn().mockResolvedValue([]) },
 }))
 
 vi.mock('../../api/workspaces.js', () => ({
@@ -79,7 +85,7 @@ vi.mock('../../api/workspaces.js', () => ({
       },
 }))
 
-vi.mock('../../api/milestones.js', () => ({
+vi.mock('../../api/planning.js', () => ({
   milestones: { getAll: vi.fn() },
   iterations: { getAll: vi.fn() },
   milestoneCategories: { getAll: vi.fn().mockResolvedValue([]) },
@@ -455,10 +461,14 @@ describe('ItemDetail time log modal rendering', () => {
 
     expect(screen.queryByTestId('time-log-modal-stub')).not.toBeInTheDocument();
 
-    itemDetailStore.showTimeLogModal = true;
-    await waitFor(() =>
-      expect(screen.getByTestId('time-log-modal-stub')).toBeInTheDocument()
-    );
+    // The modal now opens the shared time-log surface (rendered by TimeLogHost
+    // in the app shell), not an ItemDetail-local dialog.
+    await fireEvent.click(await screen.findByTestId('log-time-btn'));
+
+    await waitFor(() => expect(timeLogStore.show).toBe(true));
+    expect(timeLogStore.prefill.itemId).toBe(1);
+    // The shared host, not ItemDetail, mounts the dialog.
+    expect(screen.queryByTestId('time-log-modal-stub')).not.toBeInTheDocument();
   });
 });
 

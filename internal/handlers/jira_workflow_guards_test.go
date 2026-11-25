@@ -42,10 +42,18 @@ func TestMapJiraWorkflowGuards(t *testing.T) {
 	if mapped[1].ConditionType != models.ConditionTypeUserInRole || mapped[1].Config["role_id"] != 9 {
 		t.Fatalf("role guard = %#v, want a mappable user_in_role with role_id 9", mapped[1])
 	}
-	for _, index := range []int{2, 3, 4} {
+	for _, index := range []int{2, 3} {
 		if mapped[index].Mappable() {
 			t.Fatalf("guard %d = %#v, want unmappable", index, mapped[index])
 		}
+	}
+	// "Only the assignee can execute" now maps onto a user_is condition against
+	// the item's assignee (cb9c2d5f6) instead of staying locked.
+	if mapped[4].ConditionType != models.ConditionTypeUserIs || !mapped[4].Mappable() {
+		t.Fatalf("only_assignee guard = %#v, want a mappable user_is", mapped[4])
+	}
+	if got := mapped[4].Config["source"]; got != "assignee" {
+		t.Fatalf("only_assignee source = %v, want assignee", got)
 	}
 }
 

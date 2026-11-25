@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"windshift/internal/database"
 	"windshift/internal/repository"
@@ -65,7 +66,8 @@ func newTimerTestEnv(t *testing.T) *timerTestEnv {
 		itemRepo:    itemRepo,
 		permService: permService,
 		timePerm:    timePerm,
-		svc:         NewTimerService(repo, itemRepo, timePerm, permService),
+		svc: NewTimerService(repo, repository.NewTimeWorklogDraftRepository(db), itemRepo,
+			NewTimeWorklogService(db), timePerm, permService),
 	}
 	env.bootstrap()
 	return env
@@ -151,7 +153,7 @@ func (e *timerTestEnv) bootstrap() {
 
 func TestTimerService_StartTimer_RejectsInaccessibleWorkspace(t *testing.T) {
 	env := newTimerTestEnv(t)
-	_, err := env.svc.StartTimer(env.userID, env.gatedWSID, env.projectID, nil, "work")
+	_, err := env.svc.StartTimer(env.userID, env.gatedWSID, &env.projectID, nil, "work")
 	if !errors.Is(err, ErrTimerNotFound) {
 		t.Fatalf("expected ErrTimerNotFound, got %v", err)
 	}
@@ -163,7 +165,7 @@ func TestTimerService_StartTimer_RejectsItemFromOtherWorkspace(t *testing.T) {
 	// gatedWSID. The cross-workspace check must reject this even though
 	// the workspace itself is accessible.
 	otherWSItem := env.gatedItemID
-	_, err := env.svc.StartTimer(env.userID, env.openWSID, env.projectID, &otherWSItem, "work")
+	_, err := env.svc.StartTimer(env.userID, env.openWSID, &env.projectID, &otherWSItem, "work")
 	if !errors.Is(err, ErrTimerNotFound) {
 		t.Fatalf("expected ErrTimerNotFound, got %v", err)
 	}
@@ -174,7 +176,7 @@ func TestTimerService_StartTimer_RejectsItemInGatedWorkspace(t *testing.T) {
 	// Supplying both workspace and item from a gated workspace — the
 	// workspace check fires first and we still get a 404-style error.
 	gatedItem := env.gatedItemID
-	_, err := env.svc.StartTimer(env.userID, env.gatedWSID, env.projectID, &gatedItem, "work")
+	_, err := env.svc.StartTimer(env.userID, env.gatedWSID, &env.projectID, &gatedItem, "work")
 	if !errors.Is(err, ErrTimerNotFound) {
 		t.Fatalf("expected ErrTimerNotFound, got %v", err)
 	}
@@ -183,7 +185,7 @@ func TestTimerService_StartTimer_RejectsItemInGatedWorkspace(t *testing.T) {
 func TestTimerService_StartTimer_HappyPath(t *testing.T) {
 	env := newTimerTestEnv(t)
 	item := env.openItemID
-	timer, err := env.svc.StartTimer(env.userID, env.openWSID, env.projectID, &item, "work")
+	timer, err := env.svc.StartTimer(env.userID, env.openWSID, &env.projectID, &item, "work")
 	if err != nil {
 		t.Fatalf("StartTimer: %v", err)
 	}
@@ -203,7 +205,7 @@ func TestTimerService_StartTimer_HappyPath(t *testing.T) {
 
 func TestTimerService_StartTimer_RejectsInactiveProject(t *testing.T) {
 	env := newTimerTestEnv(t)
-	_, err := env.svc.StartTimer(env.userID, env.openWSID, env.inactiveProjID, nil, "work")
+	_, err := env.svc.StartTimer(env.userID, env.openWSID, &env.inactiveProjID, nil, "work")
 	if !errors.Is(err, ErrTimerProjectInactive) {
 		t.Fatalf("expected ErrTimerProjectInactive, got %v", err)
 	}
@@ -220,16 +222,19 @@ func TestTimerService_StopActiveForUser_DropsRevokedItemLink(t *testing.T) {
 		id := testutils.InsertID(t, env.db, q, args...)
 		return int64(id)
 	}
+	// A two-hour run: long enough to book, short enough to pass the same
+	// duration contract a manually entered worklog must satisfy.
+	start := time.Now().Add(-2 * time.Hour).UTC().Unix()
 	exec(`INSERT INTO active_timers (workspace_id, item_id, project_id, user_id, description, start_time_utc, created_at)
 	      VALUES (?, ?, ?, ?, 'leaked', ?, ?)`,
-		env.openWSID, env.gatedItemID, env.projectID, env.userID, 1000, 1000)
+		env.openWSID, env.gatedItemID, env.projectID, env.userID, start, start)
 
 	res, err := env.svc.StopActiveForUser(env.userID)
 	if err != nil {
 		t.Fatalf("StopActiveForUser: %v", err)
 	}
-	if !res.WorklogCreated {
-		t.Fatal("worklog not created")
+	if !res.Booked || res.WorklogID == nil {
+		t.Fatalf("worklog not booked: %+v", res)
 	}
 	// Verify the persisted worklog has no item_id — the suspect link was
 	// dropped, not flushed into history.
@@ -245,15 +250,21 @@ func TestTimerService_StopActiveForUser_DropsRevokedItemLink(t *testing.T) {
 func TestTimerService_StopActiveForUser_PreservesValidItemLink(t *testing.T) {
 	env := newTimerTestEnv(t)
 	item := env.openItemID
-	if _, err := env.svc.StartTimer(env.userID, env.openWSID, env.projectID, &item, "work"); err != nil {
+	if _, err := env.svc.StartTimer(env.userID, env.openWSID, &env.projectID, &item, "work"); err != nil {
 		t.Fatalf("StartTimer: %v", err)
+	}
+	// Backdate the run so the stop satisfies the same positive, under-a-day
+	// duration contract a manually entered worklog must meet.
+	if _, err := env.db.ExecWrite(`UPDATE active_timers SET start_time_utc = ? WHERE user_id = ?`,
+		time.Now().Add(-2*time.Hour).UTC().Unix(), env.userID); err != nil {
+		t.Fatalf("backdate timer: %v", err)
 	}
 	res, err := env.svc.StopActiveForUser(env.userID)
 	if err != nil {
 		t.Fatalf("StopActiveForUser: %v", err)
 	}
-	if !res.WorklogCreated {
-		t.Fatal("worklog not created")
+	if !res.Booked || res.WorklogID == nil {
+		t.Fatalf("worklog not booked: %+v", res)
 	}
 	var itemID *int
 	if err := env.db.QueryRow(`SELECT item_id FROM time_worklogs WHERE user_id = ? ORDER BY id DESC LIMIT 1`, env.userID).Scan(&itemID); err != nil {

@@ -12,7 +12,7 @@ vi.mock('../../api/users.js', () => ({
   getAssignableUsers: mocks.getAssignableUsers,
 }))
 
-vi.mock('../../api/milestones.js', () => ({
+vi.mock('../../api/planning.js', () => ({
   milestones: { getAll: vi.fn().mockResolvedValue([]) },
   milestoneCategories: { getAll: vi.fn().mockResolvedValue([]) },
 }))
@@ -32,7 +32,7 @@ vi.mock('../../stores/i18n.svelte.js', () => ({ t: (key) => key }));
 
 import TestRuns from './TestRuns.svelte';
 import { getAssignableUsers, getUsers, tests } from '../../api/users.js';
-import { milestones } from '../../api/milestones.js';
+import { milestones } from '../../api/planning.js';
 
 
 
@@ -44,7 +44,10 @@ afterEach(() => {
 test('loads runs using workspace users when the global directory is forbidden', async () => {
   render(TestRuns, { workspaceId: 7 });
   expect(await screen.findByText('Visible workspace run')).toBeInTheDocument();
-  expect(mocks.getAssignableUsers).toHaveBeenCalledWith(7);
+  expect(mocks.getAssignableUsers).toHaveBeenCalledWith(
+    7,
+    expect.objectContaining({ signal: expect.any(AbortSignal) }),
+  );
   expect(mocks.getUsers).not.toHaveBeenCalled();
   expect(mocks.errorToast).not.toHaveBeenCalled();
 });

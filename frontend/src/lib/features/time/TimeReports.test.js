@@ -85,7 +85,8 @@ describe('TimeReports', () => {
     const pageCalls = mocks.getPage.mock.calls.length;
     const aggregateCalls = mocks.aggregate.mock.calls.length;
 
-    await fireEvent.input(document.querySelector('#report-date-from'), { target: { value: '' } });
+    // The bound is the shared DatePicker: its clear control empties the filter.
+    await fireEvent.click(screen.getByTestId('time-report-date-from-clear'));
     await fireEvent.click(screen.getByTestId('time-report-apply-filters'));
 
     // The incomplete range must not issue a rejected query that resets the

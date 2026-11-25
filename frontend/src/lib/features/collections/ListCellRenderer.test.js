@@ -3,7 +3,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, test, vi } from 'vi
 import { items } from '../../api/items.js';
 import { workspaces } from '../../api/workspaces.js';
 import { getAssignableUsers } from '../../api/users.js';
-import { iterations, milestones } from '../../api/milestones.js';
+import { iterations, milestones } from '../../api/planning.js';
 import { links, priorities } from '../../api/configuration.js';
 import { customerOrganisations, portalCustomers } from '../../api/portal.js';
 import { assets } from '../../api/assets.js';
@@ -35,7 +35,7 @@ vi.mock('../../api/users.js', () => ({
   getAssignableUsers: vi.fn(),
 }))
 
-vi.mock('../../api/milestones.js', () => ({
+vi.mock('../../api/planning.js', () => ({
   milestones: { getAll: vi.fn() },
   iterations: { getAll: vi.fn() },
   milestoneCategories: { getAll: vi.fn().mockResolvedValue([]) },
@@ -132,7 +132,10 @@ describe('ListCellRenderer collection option loading (WI-630)', () => {
     await openAssignee(102);
 
     await waitFor(() => expect(getAssignableUsers).toHaveBeenCalledTimes(1));
-    expect(getAssignableUsers).toHaveBeenCalledWith(11);
+    expect(getAssignableUsers).toHaveBeenCalledWith(
+      11,
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
 
     resolveUsers([{ id: 1101, first_name: 'Eleven', last_name: 'User' }]);
     await waitFor(() => {
@@ -160,8 +163,8 @@ describe('ListCellRenderer collection option loading (WI-630)', () => {
     await waitFor(() => expect(screen.getByTestId('user-picker-option-2200')).toBeInTheDocument());
 
     expect(getAssignableUsers).toHaveBeenCalledTimes(2);
-    expect(getAssignableUsers).toHaveBeenNthCalledWith(1, 11);
-    expect(getAssignableUsers).toHaveBeenNthCalledWith(2, 22);
+    expect(getAssignableUsers.mock.calls[0][0]).toBe(11);
+    expect(getAssignableUsers.mock.calls[1][0]).toBe(22);
     expect(collectionEditorOptions.get(11).users[0].id).toBe(1100);
     expect(collectionEditorOptions.get(22).users[0].id).toBe(2200);
   });
@@ -310,6 +313,34 @@ describe('ListCellRenderer start and end date fields', () => {
     document.body.innerHTML = '';
   });
 
+  // InlineDateEditor edits through the shared DatePicker popover: open it, page
+  // to the wanted month, pick the day, then commit with Enter.
+  async function pickDateInEditor(iso) {
+    await fireEvent.click(screen.getByTestId('inline-date-display'));
+    // The editor's date field is a DatePicker popover: open the combobox first.
+    await fireEvent.click(await screen.findByTestId('inline-date-input'));
+    const calendarTestid = 'inline-date-input-calendar';
+    const targetMonth = iso.slice(0, 7);
+    await waitFor(() => {
+      if (!document.querySelector(`[data-testid="${calendarTestid}"]`)) {
+        throw new Error('date picker calendar not rendered');
+      }
+    });
+    for (let guard = 0; guard < 36; guard += 1) {
+      const shown = document
+        .querySelector(`[data-testid="${calendarTestid}"]`)
+        ?.getAttribute('data-calendar-start')
+        ?.slice(0, 7);
+      if (shown === targetMonth) break;
+      const nav = shown > targetMonth ? 'prev' : 'next';
+      await fireEvent.click(document.querySelector(`[data-testid="${calendarTestid}-${nav}"]`));
+    }
+    await fireEvent.click(await screen.findByTestId(`${calendarTestid}-day-${iso}`));
+    await fireEvent.keyDown(document.querySelector('.inline-editor-save').closest('[role="group"]'), {
+      key: 'Enter',
+    });
+  }
+
   function renderDateCell(item, identifier, canEdit = true) {
     return render(ListCellRenderer, {
       props: {
@@ -334,10 +365,7 @@ describe('ListCellRenderer start and end date fields', () => {
   test('edits the start date and persists only that field', async () => {
     renderDateCell({ id: 903, title: 'Item 903', start_date: null }, 'start_date');
 
-    await fireEvent.click(screen.getByTestId('inline-date-display'));
-    const input = document.querySelector('input[type="date"]');
-    await fireEvent.input(input, { target: { value: '2026-05-01' } });
-    await fireEvent.keyDown(input, { key: 'Enter' });
+    await pickDateInEditor('2026-05-01');
 
     await waitFor(() => expect(items.update).toHaveBeenCalledTimes(1));
     expect(items.update).toHaveBeenCalledWith(903, { start_date: '2026-05-01' });
@@ -346,10 +374,7 @@ describe('ListCellRenderer start and end date fields', () => {
   test('edits the end date and persists only that field', async () => {
     renderDateCell({ id: 904, title: 'Item 904', end_date: null }, 'end_date');
 
-    await fireEvent.click(screen.getByTestId('inline-date-display'));
-    const input = document.querySelector('input[type="date"]');
-    await fireEvent.input(input, { target: { value: '2026-06-02' } });
-    await fireEvent.keyDown(input, { key: 'Enter' });
+    await pickDateInEditor('2026-06-02');
 
     await waitFor(() => expect(items.update).toHaveBeenCalledTimes(1));
     expect(items.update).toHaveBeenCalledWith(904, { end_date: '2026-06-02' });

@@ -16,15 +16,23 @@ import (
 type capturingSideEffects struct {
 	breachElapsedMs  int64
 	warningElapsedMs int64
+	breachDeadline   time.Time
+	warningDeadline  time.Time
+	breachWorkspace  int
+	warningWorkspace int
 }
 
-func (c *capturingSideEffects) EmitBreach(_ context.Context, _ database.Tx, cycle *models.ItemSLACycle) error {
+func (c *capturingSideEffects) EmitBreach(_ context.Context, _ database.Tx, cycle *models.ItemSLACycle, workspaceID int, deadline time.Time) error {
 	c.breachElapsedMs = cycle.ElapsedMs
+	c.breachDeadline = deadline
+	c.breachWorkspace = workspaceID
 	return nil
 }
 
-func (c *capturingSideEffects) EmitWarning(_ context.Context, _ database.Tx, cycle *models.ItemSLACycle, _ string) error {
+func (c *capturingSideEffects) EmitWarning(_ context.Context, _ database.Tx, cycle *models.ItemSLACycle, workspaceID int, _ string, deadline time.Time) error {
 	c.warningElapsedMs = cycle.ElapsedMs
+	c.warningDeadline = deadline
+	c.warningWorkspace = workspaceID
 	return nil
 }
 
@@ -60,6 +68,12 @@ func TestBreachJobEmitsElapsedAtDeadline(t *testing.T) {
 	if effects.breachElapsedMs != want {
 		t.Fatalf("emitted breach elapsed_ms = %d, want %d", effects.breachElapsedMs, want)
 	}
+	if !effects.breachDeadline.Equal(deadline) {
+		t.Fatalf("emitted breach deadline = %v, want the promised deadline %v", effects.breachDeadline, deadline)
+	}
+	if effects.breachWorkspace != fixture.workspaceID {
+		t.Fatalf("emitted breach workspace id = %d, want %d", effects.breachWorkspace, fixture.workspaceID)
+	}
 	if got := int64(lifecyclePayload(t, fixture, cycleID, "sla.breached")["elapsed_ms"].(float64)); got != want {
 		t.Fatalf("lifecycle elapsed_ms = %d, want %d", got, want)
 	}
@@ -92,19 +106,26 @@ func TestWarningJobEmitsCurrentElapsed(t *testing.T) {
 	fixture.observe(t, fixture.createdFact())
 
 	var jobID, cycleID int64
+	var thresholdKey string
 	var dueAt, deadline time.Time
-	if err := fixture.db.QueryRow(`SELECT id, cycle_id, due_at, deadline_at FROM sla_jobs WHERE kind = 'warning'`).Scan(&jobID, &cycleID, &dueAt, &deadline); err != nil {
+	if err := fixture.db.QueryRow(`SELECT id, cycle_id, threshold_key, due_at, deadline_at FROM sla_jobs WHERE kind = 'warning'`).Scan(&jobID, &cycleID, &thresholdKey, &dueAt, &deadline); err != nil {
 		t.Fatalf("load warning job: %v", err)
 	}
 	clock.now = dueAt.Add(time.Second)
 	if err := fixture.engine.RunJob(context.Background(), models.SLAJob{
-		ID: jobID, Kind: models.SLAJobWarning, CycleID: &cycleID, DueAt: dueAt, DeadlineAt: &deadline,
+		ID: jobID, Kind: models.SLAJobWarning, ThresholdKey: thresholdKey, CycleID: &cycleID, DueAt: dueAt, DeadlineAt: &deadline,
 	}); err != nil {
 		t.Fatalf("RunJob: %v", err)
 	}
 	want := dueAt.Sub(now).Milliseconds() + 1000
 	if effects.warningElapsedMs != want {
 		t.Fatalf("emitted warning elapsed_ms = %d, want %d", effects.warningElapsedMs, want)
+	}
+	if !effects.warningDeadline.Equal(deadline) {
+		t.Fatalf("emitted warning deadline = %v, want the cycle deadline %v", effects.warningDeadline, deadline)
+	}
+	if effects.warningWorkspace != fixture.workspaceID {
+		t.Fatalf("emitted warning workspace id = %d, want %d", effects.warningWorkspace, fixture.workspaceID)
 	}
 	if got := int64(lifecyclePayload(t, fixture, cycleID, "sla.warning")["elapsed_ms"].(float64)); got != want {
 		t.Fatalf("lifecycle elapsed_ms = %d, want %d", got, want)

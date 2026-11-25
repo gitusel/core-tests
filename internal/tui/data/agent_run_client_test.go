@@ -39,7 +39,7 @@ func TestLoadAgentRunsDecodesV2Page(t *testing.T) {
 				_, _ = io.WriteString(w, tc.body)
 			}))
 			t.Cleanup(server.Close)
-			client := NewClient(server.URL)
+			client := NewClient(server.URL, server.Client())
 			client.SetBearerToken("test-token")
 			got := LoadAgentRuns(client, 840, 7)()
 			want := AgentRunsLoadedMsg{ItemID: 840, RequestID: 7, Runs: tc.want}
@@ -56,7 +56,7 @@ func TestLoadAgentRunsPreservesDenial(t *testing.T) {
 		_, _ = io.WriteString(w, `{"error":{"code":"forbidden","message":"Access denied"}}`)
 	}))
 	t.Cleanup(server.Close)
-	got := LoadAgentRuns(NewClient(server.URL), 840, 7)()
+	got := LoadAgentRuns(NewClient(server.URL, server.Client()), 840, 7)()
 	want := ErrorMsg{Operation: OpAgentRuns, ItemID: 840, RequestID: 7, Err: `API error: 403 Forbidden - {"error":{"code":"forbidden","message":"Access denied"}}`}
 	if got != want {
 		t.Fatalf("message = %#v, want %#v", got, want)

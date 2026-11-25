@@ -54,6 +54,18 @@ func newAttachmentDeleteTestDB(t *testing.T) database.Database {
 			new_value TEXT,
 			changed_at DATETIME
 		)`,
+		// Upload loads the effective attachment settings before classifying the
+		// request, so the fixture needs that table for the validation branch to
+		// be reachable.
+		`CREATE TABLE attachment_settings (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			max_file_size INTEGER NOT NULL DEFAULT 52428800,
+			allowed_mime_types TEXT,
+			attachment_path TEXT NOT NULL DEFAULT '',
+			enabled BOOLEAN DEFAULT true,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`,
 		`CREATE TABLE audit_logs (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			timestamp DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -136,9 +148,9 @@ func insertAttachment(t *testing.T, db database.Database, entityType string, ite
 	return row.id
 }
 
-// TestAttachmentDelete_BrandingTypesRefused covers the critical bug: a NULL
-// item_id no longer bypasses authorization. Every branding entity_type is
-// refused via this endpoint regardless of who calls.
+// A legacy `category` discriminator that disagrees with entity_type must be
+// rejected, so an item/test attachment cannot be made public by tagging it as
+// a branding asset.
 func TestAttachmentUpload_CategoryEntityTypeMismatchRejected(t *testing.T) {
 	db := newAttachmentDeleteTestDB(t)
 	h := newAttachmentHandler(db)

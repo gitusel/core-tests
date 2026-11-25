@@ -1,13 +1,13 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('../../api/milestones.js', () => ({
+vi.mock('../../api/planning.js', () => ({
   milestones: { getAll: vi.fn(async () => []) },
   milestoneCategories: { getAll: vi.fn().mockResolvedValue([]) },
 }));
 
 import TestManagementHeaderHarness from './TestManagementHeaderHarness.svelte';
-import { milestones } from '../../api/milestones.js';
+import { milestones } from '../../api/planning.js';
 
 beforeEach(() => {
   window.history.replaceState({}, '', '/workspaces/7/tests/sets?milestone=42');

@@ -73,7 +73,9 @@ func TestFirstRepositorySyncBaselinesExistingRefs(t *testing.T) {
 		t.Fatalf("load first-sync checkpoint: %v", err)
 	}
 	provider.branches = append(provider.branches, Branch{Name: "release/2.0", SHA: "branch-new"})
-	provider.tags = append(provider.tags, Tag{Name: "v2.0", SHA: "tag-new", CreatedAt: now})
+	// The tag refetch is bounded by the checkpoint minus the lookback, so the
+	// new tag must be dated after that window to be in scope.
+	provider.tags = append(provider.tags, Tag{Name: "v2.0", SHA: "tag-new", CreatedAt: lastSyncedAt.Add(time.Minute)})
 	if err := service.syncRepository(t.Context(), provider, repoID, "owner/repo", "main", data.WorkspaceID, "TST", "", lastSyncedAt); err != nil {
 		t.Fatalf("second syncRepository() error = %v", err)
 	}

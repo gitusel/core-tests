@@ -300,13 +300,36 @@ func TestEmailScheduler_RepliesDoNotConsumeNewTicketQuota(t *testing.T) {
 			Raw: []byte(headers + "\r\nbody " + id + "\r\n"),
 		}
 	}
-	// New conversation, a reply to it, then a second new conversation.
-	client.messages = []*email.FetchedMessage{
-		rawMessage("quota-a", 1, ""),
-		rawMessage("quota-reply", 2, "quota-a"),
-		rawMessage("quota-b", 3, ""),
+	// New conversation, a reply to it, then a second new conversation. A reply
+	// is authorized only by a recipient-bound reply key naming the sender
+	// (WI-2365), so the first poll delivers the new conversation and its notice
+	// key, and the second poll carries the reply and the next new conversation.
+	client.messages = []*email.FetchedMessage{rawMessage("quota-a", 1, "")}
+	if ok := es.processChannel(ctx, channelInfo{ID: channelID, Name: "Flooded channel"}); !ok {
+		t.Fatal("initial processChannel failed")
 	}
 
+	var firstItemID int
+	if err := db.QueryRowContext(ctx, `SELECT id FROM items WHERE channel_id = ?`, channelID).Scan(&firstItemID); err != nil {
+		t.Fatalf("load first item: %v", err)
+	}
+	if _, err := db.ExecWriteContext(ctx, `
+		INSERT INTO email_reply_outbox
+			(kind, channel_id, item_id, to_email, subject, html_body, text_body,
+			 message_id, key_generation, from_email)
+		VALUES ('notice', ?, ?, 'customer@example.com', 'Quota', '', '', '<quota-a-reply-key@example.com>', 1, 'support@example.com')
+	`, channelID, firstItemID); err != nil {
+		t.Fatalf("issue reply key: %v", err)
+	}
+	if _, err := db.ExecWriteContext(ctx, `UPDATE items SET reply_key_issued_at = CURRENT_TIMESTAMP WHERE id = ?`, firstItemID); err != nil {
+		t.Fatalf("mark reply key issued: %v", err)
+	}
+
+	client.messages = []*email.FetchedMessage{
+		rawMessage("quota-a", 1, ""),
+		rawMessage("quota-reply", 2, "quota-a-reply-key"),
+		rawMessage("quota-b", 3, ""),
+	}
 	if ok := es.processChannel(ctx, channelInfo{ID: channelID, Name: "Flooded channel"}); !ok {
 		t.Fatal("processChannel failed")
 	}

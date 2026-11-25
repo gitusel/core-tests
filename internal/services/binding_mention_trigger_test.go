@@ -43,7 +43,7 @@ func seedMentionBinding(t *testing.T, st *bindingTestStack, actingUserID int) in
 		ActingUserKind:  ActingIdentityKindAgent,
 		TokenScopes:     []string{"items:read"},
 		TokenTTLMinutes: 15,
-		CreatedByUserID: st.AdminID,
+		CreatedByUserID: ptrInt(st.AdminID),
 	})
 	if err != nil {
 		t.Fatalf("seed binding: %v", err)

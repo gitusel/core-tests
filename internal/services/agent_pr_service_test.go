@@ -87,7 +87,7 @@ func newPRServiceTestStack(t *testing.T) (
 		RepoSlug:        "acme/widget",
 		RepoBaseRef:     "main",
 		SCMConnectionID: &connID,
-		CreatedByUserID: adminID,
+		CreatedByUserID: ptrInt(adminID),
 	})
 	if err != nil {
 		t.Fatalf("seed binding: %v", err)
@@ -205,7 +205,7 @@ func TestAgentPRService_SkipsWhenBindingHasNoSCMConnection(t *testing.T) {
 	_ = db.QueryRow(`SELECT id FROM users WHERE username='agent2'`).Scan(&agent2ID)
 	_ = db.QueryRow(`SELECT id FROM users WHERE username='admin'`).Scan(&adminID)
 	otherID, err := bindingsRepo.Insert(context.Background(), &models.WorkspaceAgentBinding{
-		WorkspaceID: 1, ActingUserID: agent2ID, ActingUserKind: ActingIdentityKindAgent, CreatedByUserID: adminID,
+		WorkspaceID: 1, ActingUserID: agent2ID, ActingUserKind: ActingIdentityKindAgent, CreatedByUserID: ptrInt(adminID),
 	})
 	if err != nil {
 		t.Fatalf("seed binding 2: %v", err)

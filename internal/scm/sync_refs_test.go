@@ -100,7 +100,7 @@ type errorRefProvider struct {
 	listTagsErr error
 }
 
-func (e *errorRefProvider) ListTags(_ context.Context, _, _ string, _ time.Time) ([]Tag, error) {
+func (e *errorRefProvider) ListTags(_ context.Context, _, _, _ string, _ time.Time) ([]Tag, error) {
 	return nil, e.listTagsErr
 }
 
@@ -132,7 +132,7 @@ func TestSCMRefLedgerRollsBackWhenDurableAdmissionFails(t *testing.T) {
 	svc.SetDurableActionEvents(failingDurableActionRecorder{})
 	provider := &fakeProvider{tags: []Tag{{Name: "v0.8.8", SHA: "abc123", CreatedAt: time.Now()}}}
 
-	if err := svc.syncTagsAndReleases(context.Background(), provider, "owner", "repo", 1, 99, false); err == nil {
+	if err := svc.syncTagsAndReleases(context.Background(), provider, "owner", "repo", 1, 99, false, time.Time{}); err == nil {
 		t.Fatal("syncTagsAndReleases() succeeded with failed durable admission")
 	}
 	var processed int
@@ -207,13 +207,13 @@ func TestSyncTags_EmitsEvent_Once(t *testing.T) {
 		{Name: "v1.0", SHA: "111", CreatedAt: now.Add(-time.Hour)},
 	}}
 
-	if err := svc.syncTagsAndReleases(context.Background(), prov, "owner", "repo", 1, 99, false); err != nil {
+	if err := svc.syncTagsAndReleases(context.Background(), prov, "owner", "repo", 1, 99, false, time.Time{}); err != nil {
 		t.Fatalf("first run: %v", err)
 	}
 	if got := len(emitter.snapshot()); got != 1 {
 		t.Fatalf("first run emitted %d events, want 1", got)
 	}
-	if err := svc.syncTagsAndReleases(context.Background(), prov, "owner", "repo", 1, 99, false); err != nil {
+	if err := svc.syncTagsAndReleases(context.Background(), prov, "owner", "repo", 1, 99, false, time.Time{}); err != nil {
 		t.Fatalf("second run: %v", err)
 	}
 	if got := len(emitter.snapshot()); got != 1 {
@@ -231,8 +231,16 @@ func TestSyncTags_RespectsGlob(t *testing.T) {
 		{Name: "staging-snapshot-2024", SHA: "222", CreatedAt: time.Now()},
 	}}
 
-	if err := svc.syncTagsAndReleases(context.Background(), prov, "owner", "repo", 1, 99, false); err != nil {
+	if err := svc.syncTagsAndReleases(context.Background(), prov, "owner", "repo", 1, 99, false, time.Time{}); err != nil {
 		t.Fatalf("sync: %v", err)
+	}
+	// The repo's pattern must reach the provider, which is what applies it
+	// server-side; a full refetch (zero checkpoint) passes a zero `since`.
+	if len(prov.tagPatternCalls) != 1 || prov.tagPatternCalls[0] != "v*" {
+		t.Fatalf("provider tag patterns = %v, want [v*]", prov.tagPatternCalls)
+	}
+	if len(prov.tagSinceCalls) != 1 || !prov.tagSinceCalls[0].IsZero() {
+		t.Fatalf("provider since = %v, want a single zero cutoff", prov.tagSinceCalls)
 	}
 	events := emitter.snapshot()
 	if len(events) != 1 {
@@ -253,7 +261,7 @@ func TestSyncTags_PrevTagComputation(t *testing.T) {
 		{Name: "v1.1", SHA: "bbb", CreatedAt: now.Add(-time.Hour)},
 	}}
 
-	if err := svc.syncTagsAndReleases(context.Background(), prov, "owner", "repo", 1, 99, false); err != nil {
+	if err := svc.syncTagsAndReleases(context.Background(), prov, "owner", "repo", 1, 99, false, time.Time{}); err != nil {
 		t.Fatalf("sync: %v", err)
 	}
 	events := emitter.snapshot()
@@ -275,7 +283,7 @@ func TestSyncTags_ProviderError_NoMark(t *testing.T) {
 	svc, emitter := newSyncRefsTestService(t)
 	ep := &errorRefProvider{listTagsErr: errors.New("rate limited")}
 
-	err := svc.syncTagsAndReleases(context.Background(), ep, "owner", "repo", 1, 99, false)
+	err := svc.syncTagsAndReleases(context.Background(), ep, "owner", "repo", 1, 99, false, time.Time{})
 	if err == nil {
 		t.Fatal("expected error from sync, got nil")
 	}

@@ -647,18 +647,35 @@ func TestInlineEvaluationFailureEnqueuesRepairWithoutFailingItemWrite(t *testing
 	}
 }
 
-type recordingSideEffects struct {
-	breaches int
-	warnings int
+type breachCall struct {
+	cycle       *models.ItemSLACycle
+	workspaceID int
+	deadline    time.Time
 }
 
-func (r *recordingSideEffects) EmitBreach(context.Context, database.Tx, *models.ItemSLACycle) error {
+type warningCall struct {
+	cycle        *models.ItemSLACycle
+	workspaceID  int
+	thresholdKey string
+	deadline     time.Time
+}
+
+type recordingSideEffects struct {
+	breaches    int
+	warnings    int
+	lastBreach  breachCall
+	lastWarning warningCall
+}
+
+func (r *recordingSideEffects) EmitBreach(_ context.Context, _ database.Tx, cycle *models.ItemSLACycle, workspaceID int, deadline time.Time) error {
 	r.breaches++
+	r.lastBreach = breachCall{cycle: cycle, workspaceID: workspaceID, deadline: deadline}
 	return nil
 }
 
-func (r *recordingSideEffects) EmitWarning(context.Context, database.Tx, *models.ItemSLACycle, string) error {
+func (r *recordingSideEffects) EmitWarning(_ context.Context, _ database.Tx, cycle *models.ItemSLACycle, workspaceID int, thresholdKey string, deadline time.Time) error {
 	r.warnings++
+	r.lastWarning = warningCall{cycle: cycle, workspaceID: workspaceID, thresholdKey: thresholdKey, deadline: deadline}
 	return nil
 }
 
@@ -688,6 +705,12 @@ func TestBreachJobInvokesSideEffectEmitter(t *testing.T) {
 	}
 	if effects.breaches != 1 {
 		t.Fatalf("breach side effects = %d, want 1", effects.breaches)
+	}
+	if effects.lastBreach.workspaceID != fixture.workspaceID {
+		t.Fatalf("emitted breach workspace id = %d, want %d", effects.lastBreach.workspaceID, fixture.workspaceID)
+	}
+	if !effects.lastBreach.deadline.Equal(deadline) {
+		t.Fatalf("emitted breach deadline = %v, want the job deadline %v", effects.lastBreach.deadline, deadline)
 	}
 }
 
@@ -939,7 +962,7 @@ func TestWarningJobInvokesSideEffectEmitter(t *testing.T) {
 	fixture.engine.SetClock(clock)
 	effects := &recordingSideEffects{}
 	fixture.engine.SetSideEffectEmitter(effects)
-	fixture.addWarningThreshold(t, 75, nil)
+	thresholdID := fixture.addWarningThreshold(t, 75, nil)
 	fixture.createMetric(t,
 		[]models.SLACondition{{Phase: models.SLAPhaseStart, Position: 0, ConditionType: conditionCreated, Config: json.RawMessage(`{}`)}},
 		fixture.defaultGoal(),
@@ -947,18 +970,28 @@ func TestWarningJobInvokesSideEffectEmitter(t *testing.T) {
 	fixture.observe(t, fixture.createdFact())
 
 	var warningID, cycleID int64
+	var thresholdKey string
 	var dueAt, deadline time.Time
-	if err := fixture.db.QueryRow(`SELECT id, cycle_id, due_at, deadline_at FROM sla_jobs WHERE kind = 'warning'`).Scan(&warningID, &cycleID, &dueAt, &deadline); err != nil {
+	if err := fixture.db.QueryRow(`SELECT id, cycle_id, threshold_key, due_at, deadline_at FROM sla_jobs WHERE kind = 'warning'`).Scan(&warningID, &cycleID, &thresholdKey, &dueAt, &deadline); err != nil {
 		t.Fatalf("load warning job: %v", err)
 	}
 	clock.now = dueAt.Add(time.Second)
 	if err := fixture.engine.RunJob(context.Background(), models.SLAJob{
-		ID: warningID, Kind: models.SLAJobWarning, CycleID: &cycleID, DueAt: dueAt, DeadlineAt: &deadline,
+		ID: warningID, Kind: models.SLAJobWarning, ThresholdKey: thresholdKey, CycleID: &cycleID, DueAt: dueAt, DeadlineAt: &deadline,
 	}); err != nil {
 		t.Fatalf("RunJob warning: %v", err)
 	}
 	if effects.warnings != 1 {
 		t.Fatalf("warning side effects = %d, want 1", effects.warnings)
+	}
+	if effects.lastWarning.workspaceID != fixture.workspaceID {
+		t.Fatalf("emitted warning workspace id = %d, want %d", effects.lastWarning.workspaceID, fixture.workspaceID)
+	}
+	if want := fmt.Sprintf("%d:75", thresholdID); effects.lastWarning.thresholdKey != want {
+		t.Fatalf("emitted warning threshold key = %q, want %q", effects.lastWarning.thresholdKey, want)
+	}
+	if !effects.lastWarning.deadline.Equal(deadline) {
+		t.Fatalf("emitted warning deadline = %v, want the cycle deadline %v", effects.lastWarning.deadline, deadline)
 	}
 }
 

@@ -10,7 +10,14 @@ vi.mock('../api/users.js', () => ({
   completeFIDORegistration: vi.fn(),
 }));
 
+// Enrollment completion now elevates the session through the auth store, so the
+// store is mocked instead of issuing a real /auth/me request.
+vi.mock('./auth.svelte.js', () => ({
+  authStore: { completePasskeyLogin: vi.fn().mockResolvedValue(true) },
+}));
+
 import { completeFIDORegistration, createApiToken, getApiTokens, getUser, getUserCredentials, startFIDORegistration } from '../api/users.js';
+import { authStore } from './auth.svelte.js';
 import { capabilitiesStore } from './capabilities.svelte.js';
 import { securityStore } from './securityStore.svelte.js';
 import { getScopeCatalog } from '../api/users.js';
@@ -144,6 +151,7 @@ describe('securityStore passkey enrollment mode', () => {
       credentialName: 'Laptop passkey',
       response: { id: 'processed-credential' },
     });
+    expect(authStore.completePasskeyLogin).toHaveBeenCalledTimes(1);
     expect(result).toEqual({ success: true, wasEnrollmentRequired: true });
     expect(securityStore.enrollmentOnly).toBe(false);
     expect(securityStore.showEnrollmentBanner).toBe(false);

@@ -22,8 +22,9 @@ describe('DropdownMenu trigger icon colour', () => {
     const icon = trigger.querySelector('svg');
     expect(icon).not.toBeNull();
 
-    // A token, not a literal colour.
-    expect(icon.getAttribute('style') ?? '').toContain('var(--ds-');
+    // Derived from the fill: a light background gets the dark foreground
+    // rather than the hardcoded white that made the trigger invisible.
+    expect(icon.getAttribute('style') ?? '').toContain('color: rgb(0, 0, 0)');
     expect(container.innerHTML).not.toContain('text-white');
   });
 
@@ -36,6 +37,6 @@ describe('DropdownMenu trigger icon colour', () => {
     });
 
     const icon = screen.getByTestId('dark-trigger').querySelector('svg');
-    expect(icon.getAttribute('style') ?? '').toContain('var(--ds-text-inverse)');
+    expect(icon.getAttribute('style') ?? '').toContain('color: rgb(255, 255, 255)');
   });
 });

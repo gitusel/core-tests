@@ -126,15 +126,15 @@ func TestPortalOrganisationSharedRequestVisibility(t *testing.T) {
 
 	t.Run("detail gate mirrors the list", func(t *testing.T) {
 		setOrgSharing(t, db, orgA, models.OrgRequestSharingRequesterChoice, models.OrgRequestSharingAudienceOrganisation, nil)
-		if ok, err := service.VerifyRequestOwnership(ctx, sharedTicket, portalChannelID, nil, &colleague); err != nil || !ok {
+		if ok, err := service.VerifyRequestEngagement(ctx, sharedTicket, portalChannelID, nil, &colleague); err != nil || !ok {
 			t.Fatalf("shared ticket ownership = %v, %v; want true, nil", ok, err)
 		}
-		if ok, err := service.VerifyRequestOwnership(ctx, privateTicket, portalChannelID, nil, &colleague); err != nil || ok {
+		if ok, err := service.VerifyRequestEngagement(ctx, privateTicket, portalChannelID, nil, &colleague); err != nil || ok {
 			t.Fatalf("unshared ticket ownership = %v, %v; want false, nil", ok, err)
 		}
 
 		setOrgSharing(t, db, orgA, models.OrgRequestSharingAutomatic, models.OrgRequestSharingAudienceOrganisation, nil)
-		if ok, err := service.VerifyRequestOwnership(ctx, sharedTicket, portalChannelID, nil, &outsider); err != nil || ok {
+		if ok, err := service.VerifyRequestEngagement(ctx, sharedTicket, portalChannelID, nil, &outsider); err != nil || ok {
 			t.Fatalf("cross-org ownership = %v, %v; want false, nil", ok, err)
 		}
 	})

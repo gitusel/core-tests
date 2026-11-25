@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('../api/milestones.js', () => ({
+vi.mock('../api/planning.js', () => ({
   milestones: { getAll: vi.fn().mockResolvedValue([]) },
   milestoneCategories: { getAll: vi.fn().mockResolvedValue([]) },
 }));
@@ -27,7 +27,7 @@ vi.mock('../utils/serverClock.js', () => ({
 }));
 
 import WorkItemForm from './WorkItemForm.svelte';
-import { milestones } from '../api/milestones.js';
+import { milestones } from '../api/planning.js';
 import { assets } from '../api/assets.js';
 
 
@@ -150,22 +150,34 @@ describe('date chips', () => {
   });
 
   it.each([
-    ['due date', 'create-due-date-chip', 'create-due-date-input'],
-    ['start date', 'create-start-date-chip', 'create-start-date-input'],
-    ['end date', 'create-end-date-chip', 'create-end-date-input'],
-  ])('keeps the %s popover open while the native input changes', async (_label, triggerTestId, inputTestId) => {
-    const store = createStore({
-      isFieldConfigured: (identifier) => ['due_date', 'start_date', 'end_date'].includes(identifier),
-    });
+    ['due date', 'create-due-date-chip', 'create-due-date-input', 'due_date'],
+    ['start date', 'create-start-date-chip', 'create-start-date-input', 'start_date'],
+    ['end date', 'create-end-date-chip', 'create-end-date-input', 'end_date'],
+  ])(
+    'keeps the %s picker open while its value changes',
+    async (_label, triggerTestId, inputTestId, field) => {
+      const store = createStore({
+        isFieldConfigured: (identifier) =>
+          ['due_date', 'start_date', 'end_date'].includes(identifier),
+      });
 
-    render(WorkItemForm, { props: { formStore: store } });
+      render(WorkItemForm, { props: { formStore: store } });
 
-    await fireEvent.click(screen.getByTestId(triggerTestId));
-    const input = screen.getByTestId(inputTestId);
-    await fireEvent.change(input, { target: { value: '2026-09-15' } });
+      await fireEvent.click(screen.getByTestId(triggerTestId));
+      // The chip hosts the inline DatePicker calendar; picking a day commits the
+      // new value but must not dismiss the popover.
+      const pickerRoot = await screen.findByTestId(`${inputTestId}-root`);
+      const calendar = await screen.findByTestId(`${inputTestId}-calendar`);
+      const shownMonth = calendar.getAttribute('data-calendar-start').slice(0, 7);
+      await fireEvent.click(
+        await screen.findByTestId(`${inputTestId}-calendar-day-${shownMonth}-15`)
+      );
 
-    expect(input).toBeVisible();
-  });
+      expect(store.formData[field]).toBe(`${shownMonth}-15`);
+      expect(pickerRoot).toBeVisible();
+      expect(screen.getByTestId(`${inputTestId}-calendar`)).toBeInTheDocument();
+    }
+  );
 });
 
 describe('additional fields', () => {

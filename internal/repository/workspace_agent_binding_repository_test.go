@@ -51,7 +51,7 @@ func TestWorkspaceAgentBindingRepository_InsertGetList(t *testing.T) {
 		RepoBaseRef:     "main",
 		TokenScopes:     []string{"items:read", "items:write"},
 		TokenTTLMinutes: 30,
-		CreatedByUserID: admin,
+		CreatedByUserID: intPtr(admin),
 	})
 	if err != nil {
 		t.Fatalf("insert: %v", err)
@@ -76,7 +76,7 @@ func TestWorkspaceAgentBindingRepository_InsertGetList(t *testing.T) {
 
 	// Second binding in same workspace for a different acting user is OK.
 	if _, err := repo.Insert(ctx, &models.WorkspaceAgentBinding{
-		WorkspaceID: 1, ActingUserID: agentB, ActingUserKind: "agent", CreatedByUserID: admin,
+		WorkspaceID: 1, ActingUserID: agentB, ActingUserKind: "agent", CreatedByUserID: intPtr(admin),
 	}); err != nil {
 		t.Fatalf("insert second: %v", err)
 	}
@@ -96,12 +96,12 @@ func TestWorkspaceAgentBindingRepository_InsertRejectsDuplicate(t *testing.T) {
 	repo := NewWorkspaceAgentBindingRepository(db)
 
 	if _, err := repo.Insert(ctx, &models.WorkspaceAgentBinding{
-		WorkspaceID: 1, ActingUserID: agentA, ActingUserKind: "agent", CreatedByUserID: admin,
+		WorkspaceID: 1, ActingUserID: agentA, ActingUserKind: "agent", CreatedByUserID: intPtr(admin),
 	}); err != nil {
 		t.Fatalf("first insert: %v", err)
 	}
 	_, err := repo.Insert(ctx, &models.WorkspaceAgentBinding{
-		WorkspaceID: 1, ActingUserID: agentA, ActingUserKind: "agent", CreatedByUserID: admin,
+		WorkspaceID: 1, ActingUserID: agentA, ActingUserKind: "agent", CreatedByUserID: intPtr(admin),
 	})
 	if !errors.Is(err, ErrBindingDuplicate) {
 		t.Errorf("err: want ErrBindingDuplicate, got %v", err)
@@ -122,7 +122,7 @@ func TestWorkspaceAgentBindingRepository_FindByActingUser(t *testing.T) {
 	}
 
 	if _, err := repo.Insert(ctx, &models.WorkspaceAgentBinding{
-		WorkspaceID: 1, ActingUserID: agentA, ActingUserKind: "agent", CreatedByUserID: admin,
+		WorkspaceID: 1, ActingUserID: agentA, ActingUserKind: "agent", CreatedByUserID: intPtr(admin),
 	}); err != nil {
 		t.Fatalf("seed binding: %v", err)
 	}
@@ -141,7 +141,7 @@ func TestWorkspaceAgentBindingRepository_Delete(t *testing.T) {
 	repo := NewWorkspaceAgentBindingRepository(db)
 
 	id, err := repo.Insert(ctx, &models.WorkspaceAgentBinding{
-		WorkspaceID: 1, ActingUserID: agentA, ActingUserKind: "agent", CreatedByUserID: admin,
+		WorkspaceID: 1, ActingUserID: agentA, ActingUserKind: "agent", CreatedByUserID: intPtr(admin),
 	})
 	if err != nil {
 		t.Fatalf("insert: %v", err)
@@ -172,7 +172,7 @@ func TestWorkspaceAgentBindingRepository_Delete_RejectsCrossWorkspace(t *testing
 	repo := NewWorkspaceAgentBindingRepository(db)
 
 	id, err := repo.Insert(ctx, &models.WorkspaceAgentBinding{
-		WorkspaceID: 1, ActingUserID: agentA, ActingUserKind: "agent", CreatedByUserID: admin,
+		WorkspaceID: 1, ActingUserID: agentA, ActingUserKind: "agent", CreatedByUserID: intPtr(admin),
 	})
 	if err != nil {
 		t.Fatalf("insert: %v", err)

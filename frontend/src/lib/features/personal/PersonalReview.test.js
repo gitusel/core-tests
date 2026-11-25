@@ -68,7 +68,6 @@ vi.mock('../../editors/LazyMilkdownEditor.svelte', async () => ({
 }));
 
 
-const { formatDate } = await import('../../utils/dateFormatter.js');
 
 import PersonalReview from './PersonalReview.svelte';
 import { reviews } from '../../api/misc.js';
@@ -97,30 +96,36 @@ describe('PersonalReview completed items across navigation (WI-1419)', () => {
       });
     });
 
-    const today = formatDate(new Date());
-    const yesterday = formatDate(new Date(Date.now() - 86400000));
+    // Read the date the component actually navigated to: the picker keeps the
+    // current date in a native date input, and calendar arithmetic must not be
+    // re-derived (and possibly diverge) from the local clock here.
+    const shownDate = () => document.querySelector('input[type="date"]').value;
 
     render(PersonalReview, { props: {} });
 
     // The initial (today) load is issued and stays in flight.
-    await waitFor(() => expect(pending.has(today)).toBe(true));
+    await waitFor(() => expect(pending.has(shownDate())).toBe(true));
+    const initialDate = shownDate();
 
-    // Navigate to yesterday before today's load resolves: the component
-    // starts a second, now-current load.
+    // Navigate back before today's load resolves: the component starts a
+    // second, now-current load.
     await act(async () => {
       await fireEvent.click(screen.getByTestId('review-nav-prev'));
     });
-    await waitFor(() => expect(pending.has(yesterday)).toBe(true));
+    await waitFor(() => expect(pending.size).toBe(2));
+    const navigatedDate = shownDate();
+    expect(navigatedDate).not.toBe(initialDate);
+    expect(pending.has(navigatedDate)).toBe(true);
 
-    // Yesterday's results land first and are applied.
+    // The navigated date's results land first and are applied.
     await act(async () => {
-      pending.get(yesterday)([{ id: 2, title: 'yesterday item' }]);
+      pending.get(navigatedDate)([{ id: 2, title: 'yesterday item' }]);
     });
     expect(await screen.findByTestId('stub-completed-item')).toHaveTextContent('yesterday item');
 
-    // Today's superseded response arrives last and must be discarded.
+    // The superseded initial response arrives last and must be discarded.
     await act(async () => {
-      pending.get(today)([{ id: 1, title: 'today item' }]);
+      pending.get(initialDate)([{ id: 1, title: 'today item' }]);
     });
 
     const visible = screen.getAllByTestId('stub-completed-item');

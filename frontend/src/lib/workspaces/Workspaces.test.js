@@ -2,14 +2,14 @@ import { render, screen } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  getAll: vi.fn(),
+  getPage: vi.fn(),
   storeLoad: vi.fn(),
   storeRemove: vi.fn(),
 }));
 
 vi.mock('../api/workspaces.js', () => ({
   workspaces: {
-        getAll: mocks.getAll,
+        getPage: mocks.getPage,
       },
 }));
 
@@ -75,7 +75,11 @@ function workspaceRow(id, isRestricted) {
 describe('Workspaces admin directory restricted badge', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.getAll.mockResolvedValue([workspaceRow(1, false), workspaceRow(2, true)]);
+    // WI-1446: the admin directory is paged server-side.
+    mocks.getPage.mockResolvedValue({
+      data: [workspaceRow(1, false), workspaceRow(2, true)],
+      pagination: { page: 1, page_size: 50, total_items: 2 },
+    });
   });
 
   it('marks viewer-gated workspaces as restricted and leaves open ones unmarked', async () => {
@@ -95,7 +99,12 @@ describe('Workspaces admin directory restricted badge', () => {
     render(Workspaces);
 
     await screen.findByTestId('workspace-row-2');
-    expect(mocks.getAll).toHaveBeenCalled();
+    expect(mocks.getPage).toHaveBeenCalledWith({
+      page: 1,
+      page_size: 50,
+      search: '',
+      personal: false,
+    });
     expect(mocks.storeLoad).toHaveBeenCalledWith({ force: true });
   });
 });

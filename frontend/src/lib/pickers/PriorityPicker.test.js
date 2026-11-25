@@ -8,8 +8,9 @@ import { configurationSets, priorities } from '../api/configuration.js';
 vi.mock('../api/workspaces.js', () => ({
   workspaces: {
         get: vi.fn(),
-        // WI-1351: workspace-scoped priority configuration resolves through
-        // workspaceDataStore.screenConfig, which calls getEffectiveConfig.
+        // The workspace-priorities endpoint owns configuration-set resolution;
+        // the picker no longer reimplements it.
+        getPriorities: vi.fn(),
         getEffectiveConfig: vi.fn(),
       },
 }))
@@ -31,17 +32,16 @@ describe('PriorityPicker', () => {
     vi.clearAllMocks();
   });
 
-  it('loads default priorities when the workspace configuration set has none', async () => {
-    // Store is uninitialized in this test, so screenConfig resolves to null
-    // without hitting the API, and the picker falls back to the global
-    // priority list.
-    workspaces.getEffectiveConfig.mockResolvedValue({ priorities: [] });
-    priorities.getAll.mockResolvedValue([{ id: 3, name: 'Medium', sort_order: 0 }]);
+  it('loads the target workspace priority catalog through the workspace API', async () => {
+    workspaces.getPriorities.mockResolvedValue([{ id: 3, name: 'Medium', sort_order: 0 }]);
 
     render(PriorityPicker, { props: { workspaceId: 9 } });
 
     await waitFor(() => {
-      expect(priorities.getAll).toHaveBeenCalled();
+      expect(workspaces.getPriorities).toHaveBeenCalledWith(9);
     });
+    // The global priority list is not consulted; the workspace endpoint already
+    // resolves the effective configuration set.
+    expect(priorities.getAll).not.toHaveBeenCalled();
   });
 });

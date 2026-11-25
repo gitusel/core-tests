@@ -285,7 +285,7 @@ func TestReconcileConsumerWindowQueryUsesRecordedAtIndex(t *testing.T) {
 	if tdb.Engine != "sqlite" {
 		t.Skip("SQLite query-plan regression")
 	}
-	rows, err := tdb.DB.Query("EXPLAIN QUERY PLAN "+reconcileConsumerQuery("sqlite", true),
+	rows, err := tdb.DB.Query("EXPLAIN QUERY PLAN "+reconcileConsumerQuery("sqlite", true, 0),
 		0, "projection", time.Now(), 250)
 	if err != nil {
 		t.Fatalf("explain reconcile query: %v", err)

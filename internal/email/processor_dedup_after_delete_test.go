@@ -156,7 +156,8 @@ func TestProcessor_DeletedItemStampsReplyTrackingRow(t *testing.T) {
 		t.Fatalf("root action = %s, want an item", root.Action)
 	}
 
-	reply, err := env.processor.ProcessEmail(ctx, newTestReplyEmail("<reply-1@example.com>", "<reply-root@example.com>", "reply body"), env.channelID, 0, env.config)
+	keyID := issueReplyKey(t, env, *root.ItemID, "sender@example.com")
+	reply, err := env.processor.ProcessEmail(ctx, newTestReplyEmail("<reply-1@example.com>", keyID, "reply body"), env.channelID, 0, env.config)
 	if err != nil {
 		t.Fatalf("process reply: %v", err)
 	}

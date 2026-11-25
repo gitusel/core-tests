@@ -45,7 +45,11 @@ describe('view settings store', () => {
 
     await viewSettingsStore.load(1, 7);
 
-    expect(collections.getBoardConfiguration).toHaveBeenCalledWith(7, 1);
+    expect(collections.getBoardConfiguration).toHaveBeenCalledWith(
+      7,
+      1,
+      expect.objectContaining({ signal: expect.any(AbortSignal) })
+    );
     expect(viewSettingsStore.enabledViewIds(1, 7)).toEqual(['board', 'list']);
     expect(viewSettingsStore.inherited(1, 7)).toBe(false);
 

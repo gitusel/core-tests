@@ -71,6 +71,9 @@ func (brokenDatabase) Close() error          { return nil }
 func (brokenDatabase) Initialize() error     { return nil }
 func (brokenDatabase) GetDB() *sql.DB        { return nil }
 func (brokenDatabase) GetDriverName() string { return "sqlite" }
+func (brokenDatabase) NamedPools() []database.NamedPool {
+	return nil
+}
 
 // fakeClock drives the collector's refresh interval without sleeping.
 type fakeClock struct {

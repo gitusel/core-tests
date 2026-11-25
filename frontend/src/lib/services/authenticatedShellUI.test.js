@@ -11,6 +11,12 @@ vi.mock('../stores/attachmentStatus.svelte.js', () => ({
 vi.mock('../stores/aiStore.svelte.js', () => ({
   aiStore: { hydrate: vi.fn() },
 }));
+vi.mock('../stores/brand.svelte.js', () => ({
+  brandStore: { reload: vi.fn() },
+}));
+vi.mock('../stores/collectionPreferences.svelte.js', () => ({
+  collectionPreferences: { ensureLoaded: vi.fn(() => Promise.resolve()), reset: vi.fn() },
+}));
 vi.mock('../stores/capabilities.svelte.js', () => ({
   capabilitiesStore: { hydrate: vi.fn(), failHydration: vi.fn() },
 }));
@@ -26,6 +32,7 @@ vi.mock('../stores/permissions.svelte.js', () => ({
     setHasActivePortals: vi.fn(),
     setHasPortals: vi.fn(),
     setManagesChannels: vi.fn(),
+    setOwnsBoards: vi.fn(),
     setManagesAssetSets: vi.fn(),
   },
 }));
@@ -41,6 +48,8 @@ vi.mock('../stores/workspaces.svelte.js', () => ({
 
 import { shellBootstrap, themes } from '../api/admin.js';
 import { aiStore } from '../stores/aiStore.svelte.js';
+import { brandStore } from '../stores/brand.svelte.js';
+import { collectionPreferences } from '../stores/collectionPreferences.svelte.js';
 import { attachmentStatus } from '../stores/attachmentStatus.svelte.js';
 import { capabilitiesStore } from '../stores/capabilities.svelte.js';
 import { workItemStalenessSettings } from '../stores/workItemStalenessSettings.svelte.js';
@@ -65,6 +74,7 @@ const snapshot = {
   has_portals: true,
   has_active_portals: false,
   manages_channels: true,
+  owns_boards: true,
   work_item_staleness: { stale_after_days: 30 },
 };
 
@@ -74,6 +84,8 @@ beforeEach(() => {
   themes.getActive.mockResolvedValue({ id: 9, name: 'Night' });
   workspacesStore.reload.mockResolvedValue([]);
   workspaceDataStore.refresh.mockResolvedValue();
+  brandStore.reload.mockResolvedValue();
+  collectionPreferences.ensureLoaded.mockResolvedValue();
 });
 
 describe('authenticated shell UI refresh', () => {
@@ -89,6 +101,7 @@ describe('authenticated shell UI refresh', () => {
     expect(permissionStore.setHasPortals).toHaveBeenCalledWith(true);
     expect(permissionStore.setHasActivePortals).toHaveBeenCalledWith(false);
     expect(permissionStore.setManagesChannels).toHaveBeenCalledWith(true);
+    expect(permissionStore.setOwnsBoards).toHaveBeenCalledWith(true);
     expect(permissionStore.setManagesAssetSets).toHaveBeenCalledWith(true);
   });
 

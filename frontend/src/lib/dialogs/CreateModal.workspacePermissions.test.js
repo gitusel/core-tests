@@ -21,7 +21,7 @@ vi.mock('../api/collections.js', () => ({
   collectionCategories: { getAll: vi.fn().mockResolvedValue([]) },
 }))
 
-vi.mock('../api/milestones.js', () => ({
+vi.mock('../api/planning.js', () => ({
   milestones: {},
   milestoneCategories: { getAll: vi.fn().mockResolvedValue([]) },
 }))
@@ -85,7 +85,7 @@ import CreateModal from './CreateModal.svelte';
 import { workspaces } from '../api/workspaces.js';
 import { items } from '../api/items.js';
 import { collections } from '../api/collections.js';
-import { milestones } from '../api/milestones.js';
+import { milestones } from '../api/planning.js';
 import { attachments } from '../api/misc.js';
 
 

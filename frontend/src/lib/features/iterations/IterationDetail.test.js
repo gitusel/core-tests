@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 
-vi.mock('../../api/milestones.js', () => ({
+vi.mock('../../api/planning.js', () => ({
   iterations: {
     getProgress: vi.fn(),
     get: vi.fn(),
@@ -51,7 +51,7 @@ vi.mock('./IterationBurndown.svelte', async () => ({
   default: (await import('./IterationBurndownStub.svelte')).default,
 }));
 
-import { iterations } from '../../api/milestones.js';
+import { iterations } from '../../api/planning.js';
 import IterationDetail from './IterationDetail.svelte';
 
 const PROGRESS = {

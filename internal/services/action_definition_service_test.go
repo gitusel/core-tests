@@ -32,7 +32,7 @@ func TestActionDefinitionServiceResolvesCapabilitiesByType(t *testing.T) {
 	if _, err := repo.CreateCapabilityWithWorkspaces(capability, nil); err != nil {
 		t.Fatalf("CreateCapabilityWithWorkspaces: %v", err)
 	}
-	service := NewActionDefinitionService(repo, nil)
+	service := NewActionDefinitionService(db, repo, nil)
 
 	if !service.HasCapabilityOfType(123, capability.ID, models.CapabilityDockerEnvironment) {
 		t.Fatal("matching capability type was rejected")

@@ -13,6 +13,7 @@ import (
 	"windshift/internal/cacheutil"
 	"windshift/internal/database"
 	"windshift/internal/testutils"
+	"windshift/internal/utils"
 )
 
 const sessionValidationTestIP = "198.51.100.10"
@@ -274,11 +275,12 @@ func TestSessionValidationCacheCanBeDisabled(t *testing.T) {
 }
 
 func TestNamedSessionValidationCachesHaveIndependentDiagnosticsBudgets(t *testing.T) {
+	legacyTrust := utils.NewTrustPolicy(false, false, nil, nil)
 	mainManager := NewSessionManagerWithNamedValidationCacheTTL(
-		nil, false, false, nil, "main-secret", "strict", time.Minute, "session_validation", 4,
+		nil, false, legacyTrust, "main-secret", "strict", time.Minute, "session_validation", 4,
 	)
 	sshManager := NewSessionManagerWithNamedValidationCacheTTL(
-		nil, false, false, nil, "ssh-secret", "strict", time.Minute, "ssh_session_validation", 4,
+		nil, false, legacyTrust, "ssh-secret", "strict", time.Minute, "ssh_session_validation", 4,
 	)
 	t.Cleanup(func() {
 		_ = mainManager.sessionValidation.cache.Close()
@@ -375,12 +377,11 @@ func TestSessionValidationSingleflightCoalescesConcurrentMisses(t *testing.T) {
 // NewSessionManagerWithNamedValidationCacheTTL creates a session manager whose
 // validation cache has an explicit diagnostics name. The SSH server uses it so
 // the HTTP and SSH allocations remain independently visible.
-func NewSessionManagerWithNamedValidationCacheTTL(db database.Database, useSecureCookies, useProxy bool, additionalProxies []string, cookieSecret, ipBinding string, validationCacheTTL time.Duration, cacheName string, cacheSizeMB int) *SessionManager {
+func NewSessionManagerWithNamedValidationCacheTTL(db database.Database, useSecureCookies bool, trust utils.TrustPolicy, cookieSecret, ipBinding string, validationCacheTTL time.Duration, cacheName string, cacheSizeMB int) *SessionManager {
 	return newSessionManagerWithValidationCache(
 		db,
 		useSecureCookies,
-		useProxy,
-		additionalProxies,
+		trust,
 		cookieSecret,
 		ipBinding,
 		validationCacheTTL,

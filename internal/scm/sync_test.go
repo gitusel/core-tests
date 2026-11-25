@@ -22,10 +22,11 @@ type fakeProvider struct {
 	pullRequestErr error
 
 	// RefProvider state.
-	tags          []Tag                  // returned by ListTags, filtered by since
-	compareByPair map[[2]string][]Commit // key = [base, head]
-	tagSinceCalls []time.Time            // recorded `since` values from ListTags
-	compareCalls  [][2]string            // recorded [base, head] pairs
+	tags            []Tag                  // returned by ListTags, filtered by pattern and since
+	compareByPair   map[[2]string][]Commit // key = [base, head]
+	tagPatternCalls []string               // recorded `tagPattern` values from ListTags
+	tagSinceCalls   []time.Time            // recorded `since` values from ListTags
+	compareCalls    [][2]string            // recorded [base, head] pairs
 }
 
 func (f *fakeProvider) GetType() models.SCMProviderType        { return models.SCMProviderTypeGitHub }
@@ -78,16 +79,15 @@ func (f *fakeProvider) DeleteWebhook(_ context.Context, _, _, _ string) error {
 // ListTags + CompareCommits implement RefProvider for tests of the
 // tag/release-branch sync path. Both honor the recorded-input fields so
 // tests can assert on what arguments the sync layer passed through.
-func (f *fakeProvider) ListTags(_ context.Context, _, _ string, since time.Time) ([]Tag, error) {
+func (f *fakeProvider) ListTags(_ context.Context, _, _, tagPattern string, since time.Time) ([]Tag, error) {
+	f.tagPatternCalls = append(f.tagPatternCalls, tagPattern)
 	f.tagSinceCalls = append(f.tagSinceCalls, since)
-	if since.IsZero() {
-		out := make([]Tag, len(f.tags))
-		copy(out, f.tags)
-		return out, nil
-	}
-	var out []Tag
+	out := make([]Tag, 0, len(f.tags))
 	for _, t := range f.tags {
-		if t.CreatedAt.IsZero() || !t.CreatedAt.Before(since) {
+		if !tagPatternMatches(tagPattern, t.Name) {
+			continue
+		}
+		if since.IsZero() || t.CreatedAt.IsZero() || !t.CreatedAt.Before(since) {
 			out = append(out, t)
 		}
 	}

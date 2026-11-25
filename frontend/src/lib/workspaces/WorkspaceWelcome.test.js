@@ -21,13 +21,25 @@ vi.mock('../stores/workspaceGradient.svelte.js', () => ({
 
 vi.mock('../api/workspaces.js', () => ({
   workspaces: {
-    get: vi.fn().mockResolvedValue({ id: 7, name: 'Workspace', key: 'WS' }),
     getStats: vi.fn().mockResolvedValue({
       totalCollections: 0,
       itemsByStatusCategory: {},
       totalItems: 0,
     }),
+    getOverviewCharts: vi.fn().mockResolvedValue({ buckets: [] }),
     updateHomepageLayout: vi.fn().mockResolvedValue({}),
+  },
+}));
+
+// The dashboard reads its workspace snapshot through the shared store, which
+// aggregates bootstrap, labels, and reference data. Only the snapshot matters
+// here; the rest of the store's behavior has its own tests.
+vi.mock('../stores/workspaceDataStore.svelte.js', () => ({
+  workspaceDataStore: {
+    getReferenceSnapshot: vi.fn().mockResolvedValue({
+      workspace: { id: 7, name: 'Workspace', key: 'WS' },
+      status_categories: [],
+    }),
   },
 }));
 

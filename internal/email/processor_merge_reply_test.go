@@ -13,9 +13,9 @@ import (
 )
 
 // TestFindParentItemRoutesReplyAfterMerge verifies a reply to a merged
-// duplicate's thread still reaches the canonical: the merge re-points
-// email_message_tracking, so matching happens before the read-only redirect
-// would refuse the comment.
+// duplicate's thread still reaches the canonical: the merge re-points the
+// duplicate's reply keys and thread rows onto the canonical, so matching
+// happens before the read-only redirect would refuse the comment.
 func TestFindParentItemRoutesReplyAfterMerge(t *testing.T) {
 	tdb := testutils.CreateTestDB(t, true)
 	t.Cleanup(func() { _ = tdb.Close() })
@@ -31,6 +31,8 @@ func TestFindParentItemRoutesReplyAfterMerge(t *testing.T) {
 		t.Fatalf("insert customer: %v", err)
 	}
 
+	// Both tickets share the requester, which is the merge case that moves the
+	// conversation: the sender's replies then continue on the canonical.
 	newItem := func(number int, title string) int {
 		t.Helper()
 		var id int
@@ -45,10 +47,20 @@ func TestFindParentItemRoutesReplyAfterMerge(t *testing.T) {
 	canonical := newItem(1, "Canonical")
 	duplicate := newItem(2, "Duplicate")
 
-	const threadMessageID = "<thread-dup@example.com>"
+	// The duplicate's outbound notice carries a recipient-bound reply key; the
+	// merge re-points it at the canonical.
+	const threadMessageID = "<ws-notice-dup-key@example.com>"
 	if _, err := db.ExecWrite(`
-		INSERT INTO email_message_tracking (channel_id, message_id, dedup_key, from_email, item_id)
-		VALUES (?, ?, ?, 'customer@example.com', ?)
+		INSERT INTO email_reply_outbox
+			(kind, channel_id, item_id, to_email, subject, html_body, text_body,
+			 message_id, key_generation, from_email)
+		VALUES ('notice', ?, ?, 'customer@example.com', 'Your request', '', '', ?, 1, 'support@example.com')
+	`, channelID, duplicate, threadMessageID); err != nil {
+		t.Fatalf("insert reply key: %v", err)
+	}
+	if _, err := db.ExecWrite(`
+		INSERT INTO email_message_tracking (channel_id, message_id, dedup_key, from_email, item_id, direction)
+		VALUES (?, ?, ?, 'customer@example.com', ?, 'outbound')
 	`, channelID, threadMessageID, threadMessageID, duplicate); err != nil {
 		t.Fatalf("insert tracking: %v", err)
 	}

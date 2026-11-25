@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"windshift/internal/database"
+	"windshift/internal/repository"
 	"windshift/internal/services/actiontemplates"
 )
 
@@ -39,7 +40,8 @@ func TestApplyActionTemplateRollsBackOnGraphWriteFailure(t *testing.T) {
 	if len(templates) == 0 {
 		t.Fatal("embedded action template registry is empty")
 	}
-	if _, err := NewActionTemplateService(db).ApplyToWorkspace(context.Background(), templates[0].Key, workspaceID, 0); err == nil {
+	if _, err := NewActionTemplateService(db, repository.NewActionRepository(db)).
+		ApplyToWorkspace(context.Background(), templates[0].Key, workspaceID, 0, ActionWriteMeta{}); err == nil {
 		t.Fatal("template application unexpectedly succeeded")
 	}
 

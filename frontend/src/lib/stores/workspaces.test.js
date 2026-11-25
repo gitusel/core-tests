@@ -218,15 +218,22 @@ describe('workspacesStore.load', () => {
     expect(get(workspacesStore).loaded).toBe(true);
   });
 
-  test('on API failure: empty list, total reset, loaded=true, error logged', async () => {
+  test('on API failure: empty list, total reset, not cached as loaded, error logged', async () => {
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     workspaces.getPage.mockRejectedValueOnce(new Error('500'));
     await workspacesStore.load();
     expect(get(workspacesStore).workspaces).toEqual([]);
     expect(get(workspacesStore).total).toBe(0);
-    expect(get(workspacesStore).loaded).toBe(true);
+    // A failed load must stay retryable: it is never cached as loaded.
+    expect(get(workspacesStore).loaded).toBe(false);
     expect(get(workspacesStore).loading).toBe(false);
     expect(errSpy).toHaveBeenCalled();
+
+    workspaces.getPage.mockResolvedValueOnce(pageDocument([{ id: 1, name: 'A' }]));
+    await workspacesStore.load();
+    expect(workspaces.getPage).toHaveBeenCalledTimes(2);
+    expect(get(workspacesStore).loaded).toBe(true);
+    expect(get(workspacesStore).workspaces).toHaveLength(1);
   });
 
   test('shares an in-flight list request and reuses the loaded catalog', async () => {

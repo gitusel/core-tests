@@ -46,14 +46,15 @@ describe('collections API', () => {
 
     expect(fetchV2Data).toHaveBeenCalledOnce();
     expect(fetchV2Data).toHaveBeenCalledWith(
-      '/collections/9/board-configuration/bootstrap?workspace_id=4'
+      '/collections/9/board-configuration/bootstrap?workspace_id=4',
+      {}
     );
   });
 
   it('requests a default workspace Board Configuration bootstrap', async () => {
     await collections.getBoardConfigurationBootstrap(null, 4);
 
-    expect(fetchV2Data).toHaveBeenCalledWith('/workspaces/4/board-configuration/bootstrap');
+    expect(fetchV2Data).toHaveBeenCalledWith('/workspaces/4/board-configuration/bootstrap', {});
   });
 
   it('upserts and deletes Board Configuration through its scope', async () => {

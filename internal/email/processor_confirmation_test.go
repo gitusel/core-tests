@@ -45,14 +45,24 @@ func TestProcessor_SendsIntakeConfirmationOnceForNewItem(t *testing.T) {
 	if len(sender.calls) != 1 {
 		t.Fatalf("confirmation calls = %d, want 1", len(sender.calls))
 	}
-	if sender.calls[0].itemID != *result.ItemID || sender.calls[0].customerID != *result.CustomerID {
-		t.Fatalf("confirmation args = %+v, want item %d customer %d",
-			sender.calls[0], *result.ItemID, *result.CustomerID)
+	// A new request has no portal owner (the claimed From is not an identity),
+	// so the receipt is queued for the item's unverified contact address.
+	if sender.calls[0].itemID != *result.ItemID || sender.calls[0].customerID != 0 {
+		t.Fatalf("confirmation args = %+v, want item %d customer 0",
+			sender.calls[0], *result.ItemID)
 	}
 
-	reply := newTestReplyEmail("<conf-reply-1@example.com>", "<conf-1@example.com>", "more info")
-	if _, err := env.processor.ProcessEmailWithIntake(ctx, reply, env.channelID, 0, env.config, intake); err != nil {
+	// The reply must be authorized by the ticket's own recipient-bound key,
+	// otherwise it would start a second ticket and the "no receipt for a reply"
+	// half of this contract would never be exercised (WI-2365).
+	keyID := issueReplyKey(t, env, *result.ItemID, "sender@example.com")
+	reply := newTestReplyEmail("<conf-reply-1@example.com>", keyID, "more info")
+	replyResult, err := env.processor.ProcessEmailWithIntake(ctx, reply, env.channelID, 0, env.config, intake)
+	if err != nil {
 		t.Fatalf("reply: %v", err)
+	}
+	if replyResult.Action != email.ActionCommentAdded || replyResult.ItemID == nil || *replyResult.ItemID != *result.ItemID {
+		t.Fatalf("reply result = %#v, want a comment on item %d", replyResult, *result.ItemID)
 	}
 	if len(sender.calls) != 1 {
 		t.Fatalf("reply triggered another confirmation; calls = %d, want 1", len(sender.calls))

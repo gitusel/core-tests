@@ -31,7 +31,7 @@ func TestClientGetTimeProjectsUsesBearerV1(t *testing.T) {
 	}))
 	t.Cleanup(server.Close)
 
-	client := NewClient(server.URL)
+	client := NewClient(server.URL, server.Client())
 	client.SetBearerToken("tui-token")
 	projects, err := client.getTimeProjects()
 	if err != nil {
@@ -96,7 +96,7 @@ func TestClientCreateTimeLogUsesBearerV1Contract(t *testing.T) {
 	}))
 	t.Cleanup(server.Close)
 
-	client := NewClient(server.URL)
+	client := NewClient(server.URL, server.Client())
 	client.SetBearerToken("tui-token")
 	if err := client.createTimeLog(41, 23, "Implemented convergence", "1h30m", "2026-09-02", "09:15", "Europe/Zurich"); err != nil {
 		t.Fatalf("createTimeLog: %v", err)

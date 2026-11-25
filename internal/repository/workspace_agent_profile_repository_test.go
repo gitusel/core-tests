@@ -17,7 +17,7 @@ func TestWorkspaceAgentBindingRepository_PersistsAgentStudioProfileContract(t *t
 		WorkspaceID:     1,
 		ActingUserID:    agentA,
 		ActingUserKind:  "agent",
-		CreatedByUserID: admin,
+		CreatedByUserID: intPtr(admin),
 	})
 	if err != nil {
 		t.Fatalf("insert legacy binding: %v", err)
@@ -48,7 +48,7 @@ func TestWorkspaceAgentBindingRepository_PersistsAgentStudioProfileContract(t *t
 			"issue_management",
 			"users_approvals",
 		},
-		CreatedByUserID: admin,
+		CreatedByUserID: intPtr(admin),
 	})
 	if err != nil {
 		t.Fatalf("insert Standard profile: %v", err)
@@ -87,7 +87,7 @@ func TestWorkspaceAgentBindingRepository_ArchiveRestorePreservesStableProfile(t 
 		WorkspaceID:     1,
 		ActingUserID:    agentA,
 		ActingUserKind:  "agent",
-		CreatedByUserID: admin,
+		CreatedByUserID: intPtr(admin),
 	})
 	if err != nil {
 		t.Fatalf("insert profile: %v", err)
@@ -153,7 +153,7 @@ func TestWorkspaceAgentBindingRepository_RuntimeEditCreatesDraftVersion(t *testi
 		WorkspaceID:     1,
 		ActingUserID:    agentA,
 		ActingUserKind:  "agent",
-		CreatedByUserID: admin,
+		CreatedByUserID: intPtr(admin),
 	})
 	if err != nil {
 		t.Fatalf("insert profile: %v", err)

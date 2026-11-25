@@ -90,7 +90,7 @@ vi.mock('../api/configuration.js', () => ({
   priorities: { getAll: vi.fn().mockResolvedValue([]) },
 }))
 
-vi.mock('../api/milestones.js', () => ({
+vi.mock('../api/planning.js', () => ({
   milestones: { getAll: vi.fn().mockResolvedValue([]) },
   iterations: { getAll: vi.fn().mockResolvedValue([]) },
   milestoneCategories: { getAll: vi.fn().mockResolvedValue([]) },
@@ -125,14 +125,14 @@ import { configurationSets, customFields, itemTemplates, itemTypes, priorities, 
 import { items } from '../api/items.js';
 import { workspaces } from '../api/workspaces.js';
 import { labels } from '../api/misc.js';
-import { milestones } from '../api/milestones.js';
+import { milestones } from '../api/planning.js';
 import { i18n } from '../stores/i18n.svelte.js';
 import { navigate, setNavigationInterceptor } from '../router.js';
 import MobileCreatePage from './MobileCreatePage.svelte';
 import { loadMobileItemDetailSummary } from './mobileItemDetailData.js';
 
 
-import { iterations } from '../api/milestones.js';
+import { iterations } from '../api/planning.js';
 import { time } from '../api/time.js';
 
 import { getAssignableUsers } from '../api/users.js';

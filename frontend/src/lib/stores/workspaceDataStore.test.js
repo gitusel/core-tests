@@ -3,7 +3,7 @@ import { workspaces } from '../api/workspaces.js';
 import { customFields, itemTypes, priorities } from '../api/configuration.js';
 import { statusCategories, statuses } from '../api/workflows.js';
 import { getAssignableUsers, getUserDisplayBatch, getUsers } from '../api/users.js';
-import { iterations, milestones } from '../api/milestones.js';
+import { iterations, milestones } from '../api/planning.js';
 
 
 
@@ -56,7 +56,7 @@ vi.mock('../api/users.js', () => ({
   getUserDisplayBatch: mocks.getUserDisplayBatch,
 }))
 
-vi.mock('../api/milestones.js', () => ({
+vi.mock('../api/planning.js', () => ({
   milestones: { getAll: mocks.getMilestones },
   iterations: { getAll: mocks.getIterations },
   milestoneCategories: { getAll: vi.fn().mockResolvedValue([]) },
@@ -236,7 +236,11 @@ describe('WorkspaceDataStore workspace switching', () => {
 
     await workspaceDataStore.initialize(9);
 
-    expect(mocks.getLabels).toHaveBeenCalledWith(9);
+    // The directory read carries the store's abort signal.
+    expect(mocks.getLabels).toHaveBeenCalledWith(
+      9,
+      expect.objectContaining({ signal: expect.any(AbortSignal) })
+    );
     expect(workspaceDataStore.labels).toEqual([{ id: 1, name: 'urgent', color: '#f00' }]);
   });
 

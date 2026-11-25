@@ -2,7 +2,6 @@ package email
 
 import (
 	"context"
-	"fmt"
 	"path/filepath"
 	"testing"
 	"time"
@@ -121,10 +120,11 @@ func TestTrackingPreclaimRecoversOnlyStaleIncompleteClaims(t *testing.T) {
 	}
 }
 
-// TestSenderThreadParticipationIsItemScoped pins the WI-1546 contract: the
-// thread belongs to the item, not to a channel, so a prior participant on the
-// item's thread authorizes regardless of which channel their messages used,
-// while a participant on some other item's thread does not.
+// TestSenderThreadParticipationIsItemScoped pins the item-scoped reply
+// contract: authorization belongs to the request, not to the mailbox a message
+// arrived on, and not to the sender's own thread history. A prior sender is not
+// an identity (WI-2365); the item's recorded contact address is, on whichever
+// channel the conversation started.
 func TestSenderThreadParticipationIsItemScoped(t *testing.T) {
 	db := newProcessorRegressionTestDB(t)
 	insertChannel := func(name string) int {
@@ -146,8 +146,8 @@ func TestSenderThreadParticipationIsItemScoped(t *testing.T) {
 		t.Fatalf("insert workspace: %v", err)
 	}
 	if err := db.QueryRow(`
-		INSERT INTO items (workspace_id, workspace_item_number, title, channel_id, frac_index)
-		VALUES (?, 1, 'Thread item', ?, ?) RETURNING id
+		INSERT INTO items (workspace_id, workspace_item_number, title, channel_id, contact_email, frac_index)
+		VALUES (?, 1, 'Thread item', ?, 'sender@example.com', ?) RETURNING id
 	`, workspaceID, firstChannelID, testutils.NextTestFracIndex()).Scan(&itemID); err != nil {
 		t.Fatalf("insert item: %v", err)
 	}
@@ -157,7 +157,8 @@ func TestSenderThreadParticipationIsItemScoped(t *testing.T) {
 	`, workspaceID, secondChannelID, testutils.NextTestFracIndex()).Scan(&otherItemID); err != nil {
 		t.Fatalf("insert other item: %v", err)
 	}
-	// Sender last participated on a different email channel than the item's.
+	// The sender's mail arrived on the other mailbox, which is irrelevant: the
+	// address is the item's recorded contact.
 	if _, err := db.ExecWrite(`
 		INSERT INTO email_message_tracking
 			(channel_id, message_id, dedup_key, from_email, item_id)
@@ -165,14 +166,22 @@ func TestSenderThreadParticipationIsItemScoped(t *testing.T) {
 	`, secondChannelID, itemID); err != nil {
 		t.Fatalf("insert cross-channel participant: %v", err)
 	}
+	// Thread history on a different request authorizes nothing on that request.
+	if _, err := db.ExecWrite(`
+		INSERT INTO email_message_tracking
+			(channel_id, message_id, dedup_key, from_email, item_id)
+		VALUES (?, '<other-item@example.com>', '<other-item@example.com>', 'sender@example.com', ?)
+	`, secondChannelID, otherItemID); err != nil {
+		t.Fatalf("insert other-item history: %v", err)
+	}
 
 	processor := NewProcessor(db, blobstore.Disabled())
 	if !processor.senderIsThreadParticipant(context.Background(), itemID, "sender@example.com") {
-		t.Fatal("participant on the item's thread (other channel) was not authorized")
+		t.Fatal("the item's recorded contact (other channel) was not authorized")
 	}
-	// Participation on a different item authorizes nothing on this one.
+	// The sender's own prior message on another request is not a grant there.
 	if processor.senderIsThreadParticipant(context.Background(), otherItemID, "sender@example.com") {
-		t.Fatal("participation on another item's thread authorized this item")
+		t.Fatal("prior thread history on another item authorized this item")
 	}
 	// Unknown senders stay rejected.
 	if processor.senderIsThreadParticipant(context.Background(), itemID, "stranger@example.com") {
@@ -180,146 +189,11 @@ func TestSenderThreadParticipationIsItemScoped(t *testing.T) {
 	}
 }
 
-// TestSenderThreadParticipationAcceptsExternalParticipant proves WI-1136: an
-// explicitly added external participant can reply by email to the item's
-// thread, and only to that item.
-func TestSenderThreadParticipationAcceptsExternalParticipant(t *testing.T) {
-	db := newProcessorRegressionTestDB(t)
-	var workspaceID, itemID, otherItemID int
-	if err := db.QueryRow(`INSERT INTO workspaces (name, key) VALUES ('Participants', 'PRT') RETURNING id`).Scan(&workspaceID); err != nil {
-		t.Fatalf("insert workspace: %v", err)
-	}
-	if err := db.QueryRow(`
-		INSERT INTO items (workspace_id, workspace_item_number, title, frac_index)
-		VALUES (?, 1, 'Participant item', ?) RETURNING id
-	`, workspaceID, testutils.NextTestFracIndex()).Scan(&itemID); err != nil {
-		t.Fatalf("insert item: %v", err)
-	}
-	if err := db.QueryRow(`
-		INSERT INTO items (workspace_id, workspace_item_number, title, frac_index)
-		VALUES (?, 2, 'Other item', ?) RETURNING id
-	`, workspaceID, testutils.NextTestFracIndex()).Scan(&otherItemID); err != nil {
-		t.Fatalf("insert other item: %v", err)
-	}
-	var customerID int
-	if err := db.QueryRow(`
-		INSERT INTO portal_customers (name, email, created_via)
-		VALUES ('Participant', 'participant@example.com', 'agent') RETURNING id
-	`).Scan(&customerID); err != nil {
-		t.Fatalf("insert customer: %v", err)
-	}
-	if _, err := db.ExecWrite(`INSERT INTO item_participants (item_id, portal_customer_id) VALUES (?, ?)`, itemID, customerID); err != nil {
-		t.Fatalf("insert participant: %v", err)
-	}
-
-	processor := NewProcessor(db, blobstore.Disabled())
-	if !processor.senderIsThreadParticipant(context.Background(), itemID, "PARTICIPANT@example.com") {
-		t.Fatal("external participant was not authorized to reply")
-	}
-	if processor.senderIsThreadParticipant(context.Background(), otherItemID, "participant@example.com") {
-		t.Fatal("participant on another item authorized this item")
-	}
-	if processor.senderIsThreadParticipant(context.Background(), itemID, "stranger@example.com") {
-		t.Fatal("unknown sender was authorized")
-	}
-}
-
-// TestSenderThreadParticipationRevokedByParticipantRemoval is the WI-1715
-// regression: an accepted reply, then an explicit participant removal, must not
-// leave the removed sender able to reply onto the original ticket through their
-// old thread history. The creator and a re-added participant keep access.
-func TestSenderThreadParticipationRevokedByParticipantRemoval(t *testing.T) {
-	db := newProcessorRegressionTestDB(t)
-	var workspaceID int
-	if err := db.QueryRow(`INSERT INTO workspaces (name, key) VALUES ('Removal', 'RMV') RETURNING id`).Scan(&workspaceID); err != nil {
-		t.Fatalf("insert workspace: %v", err)
-	}
-	var channelID int
-	if err := db.QueryRow(`INSERT INTO channels (name, type, direction) VALUES ('Mailbox', 'email', 'inbound') RETURNING id`).Scan(&channelID); err != nil {
-		t.Fatalf("insert channel: %v", err)
-	}
-	var customerID int
-	if err := db.QueryRow(`INSERT INTO portal_customers (name, email, created_via) VALUES ('Participant', 'participant@example.com', 'agent') RETURNING id`).Scan(&customerID); err != nil {
-		t.Fatalf("insert customer: %v", err)
-	}
-	var itemID int
-	if err := db.QueryRow(`
-		INSERT INTO items (workspace_id, workspace_item_number, title, channel_id, frac_index)
-		VALUES (?, 1, 'Removal item', ?, ?) RETURNING id
-	`, workspaceID, channelID, testutils.NextTestFracIndex()).Scan(&itemID); err != nil {
-		t.Fatalf("insert item: %v", err)
-	}
-	// The participant already replied once, so thread history would normally
-	// authorize their next reply.
-	if _, err := db.ExecWrite(`
-		INSERT INTO email_message_tracking
-			(channel_id, message_id, dedup_key, from_email, item_id, direction)
-		VALUES (?, '<participant@example.com>', '<participant@example.com>', 'participant@example.com', ?, 'inbound')
-	`, channelID, itemID); err != nil {
-		t.Fatalf("insert participant tracking: %v", err)
-	}
-
-	addParticipant := func() {
-		t.Helper()
-		if _, err := db.ExecWrite(`
-			INSERT INTO item_participants (item_id, portal_customer_id)
-			VALUES (?, ?)
-			ON CONFLICT (item_id, portal_customer_id) DO NOTHING
-		`, itemID, customerID); err != nil {
-			t.Fatalf("add participant: %v", err)
-		}
-	}
-	removeParticipant := func() {
-		t.Helper()
-		if _, err := db.ExecWrite(`DELETE FROM item_participants WHERE item_id = ? AND portal_customer_id = ?`, itemID, customerID); err != nil {
-			t.Fatalf("remove participant: %v", err)
-		}
-		// Mirrors the tombstone ItemParticipantService.Remove writes.
-		if _, err := db.ExecWrite(`
-			INSERT INTO item_history (item_id, field_name, old_value, changed_at)
-			VALUES (?, 'participant_removed', ?, CURRENT_TIMESTAMP)
-		`, itemID, "participant@example.com"); err != nil {
-			t.Fatalf("record removal history: %v", err)
-		}
-	}
-
-	ctx := context.Background()
-	addParticipant()
-	processor := NewProcessor(db, blobstore.Disabled())
-	if !processor.senderIsThreadParticipant(ctx, itemID, "participant@example.com") {
-		t.Fatal("active participant was not authorized")
-	}
-
-	removeParticipant()
-	if processor.senderIsThreadParticipant(ctx, itemID, "participant@example.com") {
-		t.Fatal("removed participant retained thread access")
-	}
-
-	// Re-adding restores access.
-	addParticipant()
-	if !processor.senderIsThreadParticipant(ctx, itemID, "participant@example.com") {
-		t.Fatal("re-added participant lost access")
-	}
-
-	// The creator is not a participant; a participant removal must not affect the
-	// creator's own reply access.
-	var creatorCustomerID int
-	if err := db.QueryRow(`INSERT INTO portal_customers (name, email, created_via) VALUES ('Creator', 'creator@example.com', 'agent') RETURNING id`).Scan(&creatorCustomerID); err != nil {
-		t.Fatalf("insert creator: %v", err)
-	}
-	if _, err := db.ExecWrite(`UPDATE items SET creator_portal_customer_id = ? WHERE id = ?`, creatorCustomerID, itemID); err != nil {
-		t.Fatalf("set creator: %v", err)
-	}
-	if !processor.senderIsThreadParticipant(ctx, itemID, "creator@example.com") {
-		t.Fatal("creator lost reply access")
-	}
-}
-
-// TestFindParentItemRoutesPortalReplyAcrossChannels is the WI-1546 loop: a
-// portal ticket's synthetic anchor was minted on the portal channel; the
-// customer replies by email to the notification, so the message arrives on the
-// email intake channel quoting the anchor. Matching must find the portal item,
-// and the creator must be recognized without any prior tracked message.
+// TestFindParentItemRoutesPortalReplyAcrossChannels is the WI-1546 loop: the
+// ticket was created on the portal channel, the customer replies by email to
+// the notification on the email intake channel. Matching happens on the
+// recipient-bound reply key recorded when that notice was delivered, and the
+// creator is recognized without any prior tracked message (WI-2365).
 func TestFindParentItemRoutesPortalReplyAcrossChannels(t *testing.T) {
 	db := newProcessorRegressionTestDB(t)
 	var workspaceID int
@@ -344,41 +218,41 @@ func TestFindParentItemRoutesPortalReplyAcrossChannels(t *testing.T) {
 	`, workspaceID, portalChannelID, customerID, testutils.NextTestFracIndex()).Scan(&itemID); err != nil {
 		t.Fatalf("insert portal item: %v", err)
 	}
-	// The synthetic thread anchor minted at submission (slice 1).
-	anchorID := fmt.Sprintf("<ws-item-%d@windshift.local>", itemID)
+	// The notice sent for this request carries a recipient-bound reply key.
+	keyID := "<ws-notice-reply@windshift.local>"
 	if _, err := db.ExecWrite(`
-		INSERT INTO email_message_tracking
-			(channel_id, message_id, dedup_key, from_email, item_id, direction)
-		VALUES (?, ?, ?, '', ?, 'outbound')
-	`, portalChannelID, anchorID, anchorID, itemID); err != nil {
-		t.Fatalf("insert anchor: %v", err)
+		INSERT INTO email_reply_outbox
+			(kind, channel_id, item_id, to_email, subject, html_body, text_body,
+			 message_id, key_generation, from_email)
+		VALUES ('notice', ?, ?, 'customer@example.com', 'Your request', '', '', ?, 1, 'support@example.com')
+	`, portalChannelID, itemID, keyID); err != nil {
+		t.Fatalf("insert reply key: %v", err)
 	}
 
 	processor := NewProcessor(db, blobstore.Disabled())
 	parent := processor.findParentItem(context.Background(), &ParsedEmail{
-		InReplyTo: anchorID,
+		InReplyTo: keyID,
 		From:      EmailAddress{Address: "customer@example.com"},
 	})
 	if parent == nil || *parent != itemID {
 		t.Fatalf("portal reply parent = %v, want %d", parent, itemID)
 	}
 
-	// A stranger quoting the leaked anchor must not land on the ticket.
+	// A stranger quoting the leaked key must not land on the ticket: the key
+	// names its intended recipient.
 	if strangerParent := processor.findParentItem(context.Background(), &ParsedEmail{
-		InReplyTo: anchorID,
+		InReplyTo: keyID,
 		From:      EmailAddress{Address: "stranger@example.com"},
 	}); strangerParent != nil {
 		t.Fatalf("stranger reply matched item %d; hijack guard failed", *strangerParent)
 	}
 
-	// A participant of the email conversation (an outbound notice recipient is
-	// recorded under their from_email) may also append.
+	// An added participant of the request may also append after the key names
+	// them, regardless of which channel the conversation started on.
 	if _, err := db.ExecWrite(`
-		INSERT INTO email_message_tracking
-			(channel_id, message_id, dedup_key, from_email, item_id, direction)
-		VALUES (?, '<notice@example.com>', '<notice@example.com>', 'customer@example.com', ?, 'outbound')
-	`, emailChannelID, itemID); err != nil {
-		t.Fatalf("insert participant row: %v", err)
+		INSERT INTO item_participants (item_id, portal_customer_id) VALUES (?, ?)
+	`, itemID, customerID); err != nil {
+		t.Fatalf("insert participant: %v", err)
 	}
 	if !processor.senderIsThreadParticipant(context.Background(), itemID, "customer@example.com") {
 		t.Fatal("thread participant lost authorization after channel change")
@@ -395,24 +269,38 @@ func TestFindParentItemAcceptsLegacyBareMessageID(t *testing.T) {
 		t.Fatalf("insert channel: %v", err)
 	}
 	if err := db.QueryRow(`
-		INSERT INTO items (workspace_id, workspace_item_number, title, channel_id, frac_index)
-		VALUES (?, 1, 'Legacy thread item', ?, ?) RETURNING id
+		INSERT INTO items (workspace_id, workspace_item_number, title, channel_id, contact_email, frac_index)
+		VALUES (?, 1, 'Legacy thread item', ?, 'sender@example.com', ?) RETURNING id
 	`, workspaceID, channelID, testutils.NextTestFracIndex()).Scan(&itemID); err != nil {
 		t.Fatalf("insert item: %v", err)
 	}
+	// A pre-upgrade outbound row: generation 0, no recipient, stored bare.
 	if _, err := db.ExecWrite(`
 		INSERT INTO email_message_tracking
-			(channel_id, message_id, dedup_key, from_email, item_id)
-		VALUES (?, 'legacy@example.com', 'legacy@example.com', 'sender@example.com', ?)
+			(channel_id, message_id, dedup_key, from_email, item_id, direction)
+		VALUES (?, 'legacy@example.com', 'legacy@example.com', 'sender@example.com', ?, 'outbound')
 	`, channelID, itemID); err != nil {
 		t.Fatalf("insert legacy tracking: %v", err)
 	}
 
-	parent := NewProcessor(db, blobstore.Disabled()).findParentItem(context.Background(), &ParsedEmail{
+	processor := NewProcessor(db, blobstore.Disabled())
+	parent := processor.findParentItem(context.Background(), &ParsedEmail{
 		InReplyTo: "<legacy@example.com>",
 		From:      EmailAddress{Address: "sender@example.com"},
 	})
 	if parent == nil || *parent != itemID {
 		t.Fatalf("legacy bare Message-ID parent = %v, want %d", parent, itemID)
+	}
+
+	// Once the ticket has issued a recipient-bound key the legacy row stops
+	// authorizing, even after the outbox row is pruned (WI-2365).
+	if _, err := db.ExecWrite(`UPDATE items SET reply_key_issued_at = CURRENT_TIMESTAMP WHERE id = ?`, itemID); err != nil {
+		t.Fatalf("mark reply key issued: %v", err)
+	}
+	if stale := processor.findParentItem(context.Background(), &ParsedEmail{
+		InReplyTo: "<legacy@example.com>",
+		From:      EmailAddress{Address: "sender@example.com"},
+	}); stale != nil {
+		t.Fatalf("legacy row still authorized item %d after a reply key was issued", *stale)
 	}
 }

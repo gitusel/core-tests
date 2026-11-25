@@ -27,18 +27,24 @@ afterEach(() => {
 });
 
 describe('DatePicker', () => {
-  it('renders a native date input for Gregorian locales', async () => {
+  it('renders a Gregorian trigger and commits a picked day', async () => {
     const onchange = vi.fn();
     render(DatePicker, {
       props: { value: '2026-11-07', locale: 'en', dataTestid: 'dp', onchange }
     });
 
-    const input = screen.getByTestId('dp');
-    expect(input).toHaveAttribute('type', 'date');
-    expect(input).toHaveValue('2026-11-07');
+    // Every calendar system now shares the same combobox trigger + popover
+    // calendar; only the locale's calendar differs.
+    const trigger = screen.getByTestId('dp');
+    expect(trigger.tagName).toBe('BUTTON');
+    expect(trigger).toHaveTextContent('November 7, 2026');
 
-    await fireEvent.change(input, { target: { value: '2026-12-01' } });
-    expect(onchange).toHaveBeenCalledWith('2026-12-01', expect.anything());
+    await fireEvent.click(trigger);
+
+    const day = await screen.findByTestId('dp-calendar-day-2026-11-20');
+    await fireEvent.click(day);
+
+    expect(onchange).toHaveBeenCalledWith('2026-11-20');
   });
 
   it('renders a Jalali trigger and calendar for Persian locales', async () => {

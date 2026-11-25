@@ -263,7 +263,10 @@ func TestArtificialIMAPIngestion(t *testing.T) {
 			if err := db.QueryRow(`SELECT title, description FROM items WHERE id = ?`, *created.ItemID).Scan(&title, &description); err != nil {
 				t.Fatalf("load email-created item: %v", err)
 			}
-			if title != "Prüfung request" || description != "First line\nSecond line" {
+			// Adjacent non-blank lines keep their line break as a Markdown hard
+			// break (trailing two spaces), so the rendered item shows the same
+			// two lines the sender wrote (WI-2129).
+			if title != "Prüfung request" || description != "First line  \nSecond line" {
 				t.Fatalf("created item = title %q, description %q", title, description)
 			}
 			if err := db.QueryRow(`SELECT file_path FROM attachments WHERE item_id = ?`, *created.ItemID).Scan(&relativeAttachmentPath); err != nil {

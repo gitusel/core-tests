@@ -58,8 +58,17 @@ func TestDiagnosticsDatabasePool(t *testing.T) {
 	if response.Pool.SaturationThresholdPct != databasePoolSaturationThresholdPercent {
 		t.Fatalf("threshold = %d, want %d", response.Pool.SaturationThresholdPct, databasePoolSaturationThresholdPercent)
 	}
-	if len(response.Pools) != 1 || response.Pools[0].Name != "main" {
+	// SQLite exposes its reader and writer pools separately; "pool" is the
+	// connection-serving reader, never the single-writer pool.
+	if len(response.Pools) != 2 || response.Pools[0].Name != "main" || response.Pools[1].Name != "main" {
 		t.Fatalf("pools = %+v", response.Pools)
+	}
+	roles := map[string]bool{response.Pools[0].Role: true, response.Pools[1].Role: true}
+	if !roles["reader"] || !roles["writer"] {
+		t.Fatalf("pool roles = %+v, want reader and writer", response.Pools)
+	}
+	if response.Pool.Role != "reader" {
+		t.Fatalf("primary pool role = %q, want reader", response.Pool.Role)
 	}
 	if !response.Capacity.Safe || response.Capacity.RequiredConnections != 14 {
 		t.Fatalf("capacity = %+v", response.Capacity)

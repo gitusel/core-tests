@@ -1,12 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { itemTemplates } from '../api/configuration.js';
-
-const { itemTemplatesGetAll } = vi.hoisted(() => ({
+const { customFieldsGetAll, itemTemplatesGetAll, screensGetFields } = vi.hoisted(() => ({
+  customFieldsGetAll: vi.fn(),
   itemTemplatesGetAll: vi.fn(),
+  screensGetFields: vi.fn(),
 }));
 
 vi.mock('../api/configuration.js', () => ({
+  customFields: { getAll: customFieldsGetAll },
   itemTemplates: { getAll: itemTemplatesGetAll },
+  screens: { getFields: screensGetFields },
+}));
+
+vi.mock('../api/workspaces.js', () => ({
+  workspaces: { getEffectiveConfig: vi.fn().mockResolvedValue({ screens: { create: 1 } }) },
 }));
 
 const { workItemFormStore } = await import('./workItemFormStore.svelte.js');
@@ -30,7 +36,11 @@ describe('workItemFormStore screen-field validation', () => {
 
     workItemFormStore.configSetLoadedForWorkspace = 2;
     await workItemFormStore.loadTemplatesForCurrentType();
-    expect(itemTemplatesGetAll).toHaveBeenCalledWith(2, { item_type_id: 5 });
+    expect(itemTemplatesGetAll).toHaveBeenCalledWith(
+      2,
+      { item_type_id: 5 },
+      expect.objectContaining({ signal: expect.any(AbortSignal) })
+    );
   });
 
   it('validates required milestone against milestone_ids', () => {
@@ -88,9 +98,9 @@ describe('workItemFormStore screen-field validation', () => {
   });
 
   it('treats an empty multiselect array as missing for a required field', () => {
-    workItemFormStore.allCustomFields = [
-      { id: 42, name: 'Regions', field_type: 'multiselect' },
-    ];
+    // validate() resolves a required custom field against the rendered
+    // definitions, so the multiselect must be on the loaded screen.
+    workItemFormStore.customFields = [{ id: 42, name: 'Regions', field_type: 'multiselect' }];
     workItemFormStore.screenFields = [
       { field_type: 'custom', field_identifier: '42', is_required: true },
     ];
@@ -104,15 +114,20 @@ describe('workItemFormStore screen-field validation', () => {
     expect(workItemFormStore.validate()).toBe(true);
   });
 
-  it('does not block create for a required linking custom field', () => {
-    workItemFormStore.allCustomFields = [
-      { id: 77, name: 'Blocks', field_type: 'linking' },
-    ];
-    workItemFormStore.screenFields = [
+  it('does not block create for a required linking custom field', async () => {
+    screensGetFields.mockResolvedValue([
       { field_type: 'custom', field_identifier: '77', is_required: true },
-    ];
-    workItemFormStore.customFieldValues = { 77: '' };
+    ]);
+    customFieldsGetAll.mockResolvedValue([{ id: 77, name: 'Blocks', field_type: 'linking' }]);
 
+    await workItemFormStore.loadScreenFieldsForItemType(2, 5);
+
+    // The required flag stays on the screen, but the linking definition is not
+    // renderable on create: there is no item to link against yet.
+    expect(workItemFormStore.screenFields).toEqual([
+      { field_type: 'custom', field_identifier: '77', is_required: true },
+    ]);
+    expect(workItemFormStore.customFields).toEqual([]);
     expect(workItemFormStore.validate()).toBe(true);
     expect(workItemFormStore.validationErrors).toEqual([]);
   });

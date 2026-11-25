@@ -7,6 +7,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"windshift/internal/internalhttp"
 )
 
 type pingerFunc func(context.Context) error
@@ -93,35 +95,42 @@ func TestProbe(t *testing.T) {
 	}))
 	t.Cleanup(server.Close)
 
-	err := Probe(context.Background(), server.URL)
+	err := Probe(context.Background(), nil, server.URL)
 	if err == nil {
 		t.Fatal("Probe() error = nil, want a non-nil error for a non-2xx response")
 	}
 }
 
-func TestDefaultProbeTarget(t *testing.T) {
+func TestBaseURL(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
 		name        string
 		port        string
 		contextPath string
+		directTLS   bool
 		want        string
 	}{
 		{
 			name: "defaults",
-			want: "http://127.0.0.1:8080/readyz",
+			want: "http://127.0.0.1:8080",
 		},
 		{
 			name: "custom port",
 			port: "9090",
-			want: "http://127.0.0.1:9090/readyz",
+			want: "http://127.0.0.1:9090",
 		},
 		{
 			name:        "context path",
 			port:        "9090",
 			contextPath: "/windshift/",
-			want:        "http://127.0.0.1:9090/windshift/readyz",
+			want:        "http://127.0.0.1:9090/windshift",
+		},
+		{
+			name:      "direct TLS",
+			port:      "8443",
+			directTLS: true,
+			want:      "https://127.0.0.1:8443",
 		},
 	}
 
@@ -129,8 +138,8 @@ func TestDefaultProbeTarget(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			if got := DefaultProbeTarget(tt.port, tt.contextPath); got != tt.want {
-				t.Fatalf("DefaultProbeTarget() = %q, want %q", got, tt.want)
+			if got := internalhttp.BaseURL(tt.port, tt.contextPath, tt.directTLS); got != tt.want {
+				t.Fatalf("BaseURL() = %q, want %q", got, tt.want)
 			}
 		})
 	}

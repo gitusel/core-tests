@@ -26,7 +26,7 @@ func TestBindingService_UpdateStudioProfileEditsOnlyWorkspaceManagedIdentity(t *
 		Purpose:         "Old purpose",
 		LLMConnectionID: &llm,
 		TokenTTLMinutes: 60,
-		CreatedByUserID: st.AdminID,
+		CreatedByUserID: ptrInt(st.AdminID),
 	})
 	if err != nil {
 		t.Fatalf("seed workspace-managed profile: %v", err)
@@ -83,7 +83,7 @@ func TestBindingService_UpdateStudioProfileKeepsCentralIdentityReadOnly(t *testi
 		Purpose:         "Old purpose",
 		LLMConnectionID: &llm,
 		TokenTTLMinutes: 60,
-		CreatedByUserID: st.AdminID,
+		CreatedByUserID: ptrInt(st.AdminID),
 	})
 	if err != nil {
 		t.Fatalf("seed centralized profile: %v", err)

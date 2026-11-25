@@ -1,7 +1,7 @@
 import { cleanup, render, screen, within } from '@testing-library/svelte';
 import { afterEach, expect, test, vi } from 'vitest';
 
-vi.mock('../../api/milestones.js', () => ({
+vi.mock('../../api/planning.js', () => ({
   milestones: { getAll: vi.fn().mockResolvedValue([]) },
   milestoneCategories: { getAll: vi.fn().mockResolvedValue([]) },
 }))
@@ -65,7 +65,7 @@ vi.mock('../../stores/i18n.svelte.js', () => ({
 }));
 
 import TestSets from './TestSets.svelte';
-import { milestones } from '../../api/milestones.js';
+import { milestones } from '../../api/planning.js';
 import { tests } from '../../api/tests/index.js';
 
 

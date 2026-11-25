@@ -52,7 +52,7 @@ func TestClientGetCommentsFollowsAllPages(t *testing.T) {
 	}))
 	t.Cleanup(server.Close)
 
-	client := NewClient(server.URL)
+	client := NewClient(server.URL, server.Client())
 	client.SetBearerToken("test-token")
 	comments, err := client.getComments(840)
 	if err != nil {

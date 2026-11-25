@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
+import { render, screen } from '@testing-library/svelte';
 import { writable } from 'svelte/store';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 
@@ -38,38 +38,31 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
+// PackManager is a read-only catalog: packs are applied by selecting one in the
+// workspace creation form (CreateModal -> WorkspaceForm template picker), so
+// this screen only reports what the server ships.
 describe('PackManager', () => {
-  test('applies a built-in pack to a new workspace and renders the report', async () => {
+  test('lists the built-in packs with their version, content flag, and plugins', async () => {
     listPacks.mockResolvedValue([
-      { name: 'helpdesk', version: '1.0.0', description: 'Support', has_content: true, plugins: [] },
+      {
+        name: 'helpdesk',
+        version: '1.0.0',
+        description: 'Support',
+        has_content: true,
+        plugins: ['support-metrics'],
+      },
     ]);
-    applyPack.mockResolvedValue({
-      pack: 'helpdesk',
-      pack_version: '1.0.0',
-      status: 'applied',
-      stages: [
-        { name: 'schema', status: 'ok', detail: 'attached' },
-        { name: 'content', status: 'ok' },
-        { name: 'conformance', status: 'ok' },
-      ],
-      conformance: { conformant: true, drift_count: 0 },
-    });
 
     render(PackManager);
 
-    await fireEvent.click(await screen.findByTestId('pack-apply-helpdesk'));
-    await fireEvent.input(screen.getByTestId('pack-new-name'), {
-      target: { value: 'Helpdesk' },
-    });
-    await fireEvent.click(screen.getByTestId('pack-run-apply'));
-
-    await waitFor(() => {
-      expect(applyPack).toHaveBeenCalledWith('helpdesk', { workspace_name: 'Helpdesk' });
-    });
-
-    const report = await screen.findByTestId('pack-report');
-    expect(report).toBeTruthy();
-    expect(await screen.findByTestId('pack-stage-schema')).toBeTruthy();
-    expect(screen.getByTestId('pack-conformance')).toBeTruthy();
+    const row = await screen.findByTestId('pack-row-helpdesk');
+    expect(row).toHaveTextContent('helpdesk');
+    expect(row).toHaveTextContent('1.0.0');
+    expect(row).toHaveTextContent('settings.featurePacks.content');
+    expect(row).toHaveTextContent('Support');
+    expect(row).toHaveTextContent('support-metrics');
+    // No apply surface remains here.
+    expect(applyPack).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('pack-apply-helpdesk')).not.toBeInTheDocument();
   });
 });

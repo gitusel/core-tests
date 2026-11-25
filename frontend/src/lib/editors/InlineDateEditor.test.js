@@ -16,13 +16,20 @@ describe('InlineDateEditor', () => {
     });
 
     await fireEvent.click(screen.getByRole('button'));
-    const input = container.querySelector('input[type="date"]');
-    expect(input).not.toBeNull();
-    expect(input.value).toBe('2026-08-12');
 
-    await fireEvent.input(input, { target: { value: '2030-06-15' } });
-    await fireEvent.keyDown(input, { key: 'Enter' });
+    // The editor's date field is the shared DatePicker: the stored timestamp
+    // projects to a date-only calendar, and a picked day commits date-only.
+    await fireEvent.click(await screen.findByTestId('inline-date-input'));
+    const calendar = await screen.findByTestId('inline-date-input-calendar');
+    expect(calendar).toHaveAttribute('data-calendar-start', '2026-08-12');
+    expect(calendar.querySelector('[aria-selected="true"]')).toHaveAttribute(
+      'data-value',
+      '2026-08-12',
+    );
 
-    expect(onsave).toHaveBeenCalledWith({ value: '2030-06-15' });
+    await fireEvent.click(await screen.findByTestId('inline-date-input-calendar-day-2026-08-20'));
+    await fireEvent.keyDown(container.querySelector('[role="group"]'), { key: 'Enter' });
+
+    expect(onsave).toHaveBeenCalledWith({ value: '2026-08-20' });
   });
 });

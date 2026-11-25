@@ -10,7 +10,7 @@ vi.mock('./createCrudClient.js', () => ({
 }));
 
 const { fetchAllV2Pages, fetchV2Data } = await import('./core.js');
-const { iterations, milestones } = await import('./milestones.js');
+const { iterations, milestones } = await import('./planning.js');
 
 describe('milestones API', () => {
   beforeEach(() => {

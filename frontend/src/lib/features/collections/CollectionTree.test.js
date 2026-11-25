@@ -82,6 +82,11 @@ vi.mock('../../stores/workspaceGradient.svelte.js', () => ({
     glassStyle: () => '',
     glassTextStyle: '',
     glassSubtleTextStyle: '',
+    tableStyle: () => '',
+    tableHeaderStyle: '',
+    cardStyle: () => '',
+    columnStyle: () => '',
+    borderColor: '',
   }),
   loadWorkspaceGradient: vi.fn().mockResolvedValue(undefined),
 }));
@@ -293,7 +298,7 @@ describe('CollectionTree hierarchy loading', () => {
     render(CollectionTree, { workspaceId: 1 });
 
     const title = await screen.findByTestId('workspace-item-title-1');
-    expect(title.querySelector('span')?.getAttribute('style')).toContain('-webkit-line-clamp: 2');
+    expect(title.querySelector('.line-clamp-2')).not.toBeNull();
   });
 
   it('offers a per-root Load more when a subtree exceeded the cap', async () => {

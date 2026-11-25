@@ -7,6 +7,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"windshift/internal/utils"
 )
 
 func TestNormalizeOrigin(t *testing.T) {
@@ -53,7 +55,7 @@ func TestCreateSecurityHeaders_ImgSrcIncludesJiraOrigins(t *testing.T) {
 	origins := func() []string {
 		return []string{"https://acme.atlassian.net", "https://jira.example.com:8443"}
 	}
-	handler := createSecurityHeaders(false, false, nil, origins, nil)(next)
+	handler := createSecurityHeadersWithTrust(false, utils.NewTrustPolicy(false, false, nil, nil), origins, nil)(next)
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -71,7 +73,7 @@ func TestCreateSecurityHeaders_ImgSrcAllowsRemoteHTTPAndHTTPSImagesWhenEnabled(t
 		w.WriteHeader(http.StatusOK)
 	})
 
-	handler := createSecurityHeaders(false, false, nil, nil, func() bool { return true })(next)
+	handler := createSecurityHeadersWithTrust(false, utils.NewTrustPolicy(false, false, nil, nil), nil, func() bool { return true })(next)
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -88,7 +90,7 @@ func TestCreateSecurityHeaders_NilProviderKeepsBaseImgSrc(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	handler := createSecurityHeaders(false, false, nil, nil, nil)(next)
+	handler := createSecurityHeadersWithTrust(false, utils.NewTrustPolicy(false, false, nil, nil), nil, nil)(next)
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -106,7 +108,7 @@ func TestCreateSecurityHeaders_EmptyProviderKeepsBaseImgSrc(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	handler := createSecurityHeaders(false, false, nil, func() []string { return nil }, func() bool { return false })(next)
+	handler := createSecurityHeadersWithTrust(false, utils.NewTrustPolicy(false, false, nil, nil), func() []string { return nil }, func() bool { return false })(next)
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)

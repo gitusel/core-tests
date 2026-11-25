@@ -1,4 +1,4 @@
-import { fireEvent, render, waitFor } from '@testing-library/svelte';
+import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { writable } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
@@ -8,7 +8,13 @@ const hasPermission = vi.hoisted(() => vi.fn());
 const navigate = vi.hoisted(() => vi.fn());
 
 vi.mock('../api/workspaces.js', () => ({
-  workspaces: { create: vi.fn(), getTemplates: vi.fn().mockResolvedValue([]) },
+  workspaces: {
+    create: vi.fn(),
+    getTemplates: vi.fn().mockResolvedValue([]),
+    // WorkItemForm/WorkspaceDataStore resolve the create screen config.
+    getEffectiveConfig: vi.fn().mockResolvedValue(null),
+    getPage: vi.fn().mockResolvedValue({ data: [], pagination: { total: 0 } }),
+  },
 }))
 
 vi.mock('../api/items.js', () => ({
@@ -20,13 +26,15 @@ vi.mock('../api/collections.js', () => ({
   collectionCategories: { getAll: vi.fn().mockResolvedValue([]) },
 }))
 
-vi.mock('../api/milestones.js', () => ({
+vi.mock('../api/planning.js', () => ({
   milestones: {},
   milestoneCategories: { getAll: vi.fn().mockResolvedValue([]) },
 }))
 
 vi.mock('../api/misc.js', () => ({
   attachments: {},
+  // The shared workspace data store primes labels during bootstrap.
+  labels: { getAll: vi.fn().mockResolvedValue([]) },
 }));
 
 vi.mock('../stores/milestones.js', () => ({ milestonesStore: { add: addMilestone } }));
@@ -77,7 +85,7 @@ import CreateModal from './CreateModal.svelte';
 import { workspaces } from '../api/workspaces.js';
 import { items } from '../api/items.js';
 import { collections } from '../api/collections.js';
-import { milestones } from '../api/milestones.js';
+import { milestones } from '../api/planning.js';
 import { attachments } from '../api/misc.js';
 
 
@@ -95,6 +103,28 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
+// The target-date chip opens the shared inline DatePicker. Its calendar starts
+// on the current month, so page to the wanted month before picking the day.
+async function pickTargetDate(iso) {
+  const calendarTestid = 'milestone-target-date-calendar';
+  const targetMonth = iso.slice(0, 7);
+  await waitFor(() => {
+    if (!document.querySelector(`[data-testid="${calendarTestid}"]`)) {
+      throw new Error('target-date calendar not rendered');
+    }
+  });
+  for (let guard = 0; guard < 36; guard += 1) {
+    const shown = document
+      .querySelector(`[data-testid="${calendarTestid}"]`)
+      ?.getAttribute('data-calendar-start')
+      ?.slice(0, 7);
+    if (shown === targetMonth) break;
+    const nav = shown > targetMonth ? 'prev' : 'next';
+    await fireEvent.click(document.querySelector(`[data-testid="${calendarTestid}-${nav}"]`));
+  }
+  await fireEvent.click(await screen.findByTestId(`${calendarTestid}-day-${iso}`));
+}
+
 async function submitMilestone(props) {
   render(CreateModal, {
     props: { isOpen: true, initialType: 'milestone', skipNavigate: true, ...props },
@@ -107,9 +137,7 @@ async function submitMilestone(props) {
     button.textContent?.includes('createModal.targetDate')
   );
   await fireEvent.click(dateChip);
-  await fireEvent.input(document.querySelector('input[type="date"]'), {
-    target: { value: '2026-12-01' },
-  });
+  await pickTargetDate('2026-12-01');
 
   await waitFor(() => expect(document.querySelector('#create-modal-submit').disabled).toBe(false));
   await fireEvent.click(document.querySelector('#create-modal-submit'));

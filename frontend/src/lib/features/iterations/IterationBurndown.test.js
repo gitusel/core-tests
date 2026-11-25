@@ -43,16 +43,23 @@ it("switches remaining and ideal chart values between items and fractional story
 			],
 		},
 	});
+	// The second data point is category index 1 in both series. Asserting on the
+	// stable point testids keeps the value claim independent of the chart's
+	// locale/timezone-rendered category label.
+	const pointValues = (key) => screen.getByTestId(`chart-point-${key}-1`).getAttribute("aria-label");
+
 	const selector = screen.getByTestId("iteration-burndown-metric");
 	expect(selector).toHaveValue("items");
-	expect(screen.getByLabelText("07/02: 3")).toBeInTheDocument();
+	expect(pointValues("remaining")).toMatch(/: 3$/);
+	expect(pointValues("ideal")).toMatch(/: 2$/);
+
 	await fireEvent.change(selector, { target: { value: "points" } });
-	expect(screen.getByLabelText("07/02: 8")).toBeInTheDocument();
-	expect(screen.getByLabelText("07/02: 5.25")).toBeInTheDocument();
-	expect(screen.queryByLabelText("07/02: 3")).not.toBeInTheDocument();
+	expect(pointValues("remaining")).toMatch(/: 8$/);
+	expect(pointValues("ideal")).toMatch(/: 5\.25$/);
+
 	await fireEvent.change(selector, { target: { value: "items" } });
-	expect(screen.getByLabelText("07/02: 3")).toBeInTheDocument();
-	expect(screen.getByLabelText("07/02: 2")).toBeInTheDocument();
+	expect(pointValues("remaining")).toMatch(/: 3$/);
+	expect(pointValues("ideal")).toMatch(/: 2$/);
 });
 
 it("hides the chart when fewer than two days are available", () => {

@@ -66,8 +66,11 @@ func TestForcedJiraReimportUpdatesExistingItemByStableJiraID(t *testing.T) {
 	if count != 1 || updatedID != originalID || title != "Updated from Jira" {
 		t.Fatalf("reimport result count=%d id=%d title=%q, want one updated item %d", count, updatedID, title, originalID)
 	}
-	if updatedFracIndex == originalFracIndex {
-		t.Fatalf("frac_index was not regenerated for ranked re-import: %q", updatedFracIndex)
+	// A re-import must not move the item to the end of the backlog: the rank is
+	// preserved so manual reordering done since the first import survives
+	// (WI-1150).
+	if updatedFracIndex != originalFracIndex {
+		t.Fatalf("frac_index changed on re-import: got %q, want preserved %q", updatedFracIndex, originalFracIndex)
 	}
 	var commentCount int
 	var commentContent string

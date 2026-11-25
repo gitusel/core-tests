@@ -28,7 +28,7 @@ describe('SidebarResizeHandle', () => {
 
     await fireEvent.pointerMove(handle, { clientX: 900, pointerId: 7 });
     expect(state).toHaveAttribute('data-width', '560');
-    expect(handle).toHaveAttribute('aria-valuenow', '560');
+    expect(handle).not.toHaveAttribute('aria-valuenow');
     expect(state).toHaveAttribute('data-committed', '');
 
     await fireEvent.pointerUp(handle, { pointerId: 7 });
@@ -36,33 +36,27 @@ describe('SidebarResizeHandle', () => {
     expect(document.body).not.toHaveClass('sidebar-resize-active');
   });
 
-  it('supports keyboard resizing and double-click reset', async () => {
+  it('exposes a separator role and resets to the default width on double-click', async () => {
     render(SidebarResizeHandleHarness);
 
     const handle = screen.getByTestId('sidebar-resize-handle');
     const state = screen.getByTestId('sidebar-state');
 
     expect(handle).toHaveAttribute('role', 'separator');
-    expect(handle).toHaveAttribute('aria-valuemin', '240');
-    expect(handle).toHaveAttribute('aria-valuemax', '560');
+    expect(handle).toHaveAttribute('aria-orientation', 'vertical');
     expect(handle).toHaveAttribute('title', 'Resize hint');
 
-    await fireEvent.keyDown(handle, { key: 'ArrowRight' });
-    expect(state).toHaveAttribute('data-width', '336');
-    expect(state).toHaveAttribute('data-committed', '336:false');
-
-    await fireEvent.keyDown(handle, { key: 'Home' });
-    expect(state).toHaveAttribute('data-width', '240');
-
-    await fireEvent.keyDown(handle, { key: 'End' });
-    expect(state).toHaveAttribute('data-width', '560');
+    await fireEvent.pointerDown(handle, { button: 0, clientX: 320, pointerId: 7 });
+    await fireEvent.pointerMove(handle, { clientX: 500, pointerId: 7 });
+    expect(state).toHaveAttribute('data-width', '500');
+    await fireEvent.pointerUp(handle, { pointerId: 7 });
 
     await fireEvent.dblClick(handle);
     expect(state).toHaveAttribute('data-width', '320');
     expect(state).toHaveAttribute('data-committed', '320:false');
   });
 
-  it('reverses pointer and keyboard movement for a left-edge handle', async () => {
+  it('reverses pointer movement for a left-edge handle', async () => {
     render(SidebarResizeHandleHarness, { edge: 'left' });
 
     const handle = screen.getByTestId('sidebar-resize-handle');
@@ -77,11 +71,13 @@ describe('SidebarResizeHandle', () => {
     await fireEvent.pointerMove(handle, { clientX: 450, pointerId: 12 });
     expect(state).toHaveAttribute('data-width', '370');
     await fireEvent.pointerUp(handle, { pointerId: 12 });
+    expect(state).toHaveAttribute('data-committed', '370:false');
 
-    await fireEvent.keyDown(handle, { key: 'ArrowLeft' });
-    expect(state).toHaveAttribute('data-width', '386');
-    await fireEvent.keyDown(handle, { key: 'ArrowRight' });
-    expect(state).toHaveAttribute('data-width', '370');
+    // Dragging the left-edge handle back to the right narrows the sidebar.
+    await fireEvent.pointerDown(handle, { button: 0, clientX: 450, pointerId: 13 });
+    await fireEvent.pointerMove(handle, { clientX: 500, pointerId: 13 });
+    expect(state).toHaveAttribute('data-width', '320');
+    await fireEvent.pointerUp(handle, { pointerId: 13 });
   });
 
   it('keeps collapse optional and expands a collapsed sidebar from the handle', async () => {
@@ -96,8 +92,6 @@ describe('SidebarResizeHandle', () => {
     const handle = screen.getByTestId('sidebar-resize-handle');
     const state = screen.getByTestId('sidebar-state');
 
-    expect(handle).toHaveAttribute('aria-valuemin', '48');
-
     await fireEvent.pointerDown(handle, {
       button: 0,
       clientX: 256,
@@ -106,7 +100,6 @@ describe('SidebarResizeHandle', () => {
     await fireEvent.pointerMove(handle, { clientX: 80, pointerId: 9 });
     expect(state).toHaveAttribute('data-collapsed', 'true');
     expect(state).toHaveAttribute('data-width', '48');
-    expect(handle).toHaveAttribute('aria-valuenow', '48');
 
     await fireEvent.pointerMove(handle, { clientX: 140, pointerId: 9 });
     expect(state).toHaveAttribute('data-collapsed', 'false');
@@ -114,17 +107,6 @@ describe('SidebarResizeHandle', () => {
 
     await fireEvent.pointerUp(handle, { pointerId: 9 });
     expect(state).toHaveAttribute('data-committed', '180:false');
-
-    await fireEvent.keyDown(handle, { key: 'Home' });
-    expect(state).toHaveAttribute('data-collapsed', 'true');
-    expect(state).toHaveAttribute('data-width', '48');
-
-    await fireEvent.keyDown(handle, { key: 'ArrowRight' });
-    expect(state).toHaveAttribute('data-collapsed', 'false');
-    expect(state).toHaveAttribute('data-width', '180');
-
-    await fireEvent.keyDown(handle, { key: 'ArrowLeft' });
-    expect(state).toHaveAttribute('data-collapsed', 'true');
 
     await fireEvent.dblClick(handle);
     expect(state).toHaveAttribute('data-collapsed', 'false');

@@ -231,6 +231,9 @@ describe('App startup recovery', () => {
     expect(screen.getByTestId('startup-error')).toHaveTextContent(
       'The request timed out. Please try again.'
     );
-    expect(setup.getStatus).not.toHaveBeenCalled();
+    // Startup stops at the locale gate: setup and auth are still requested
+    // concurrently by design, but the shell never mounts.
+    expect(screen.queryByTestId('app-shell-ready')).not.toBeInTheDocument();
+    expect(authStore.init).not.toHaveBeenCalled();
   });
 });

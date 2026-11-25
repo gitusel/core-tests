@@ -5,7 +5,7 @@ import { customFields, hierarchyLevels, itemTypes, linkTypes, links, priorities,
 import { time } from '../api/time.js';
 import { customerOrganisations } from '../api/portal.js';
 import { workspaces } from '../api/workspaces.js';
-import { iterations, milestones } from '../api/milestones.js';
+import { iterations, milestones } from '../api/planning.js';
 import { requestTypes } from '../api/channels.js';
 import { getDiagrams } from '../api/misc.js';
 import { actions } from '../api/actions.js';
@@ -91,7 +91,7 @@ vi.mock('../api/workspaces.js', () => ({
       },
 }))
 
-vi.mock('../api/milestones.js', () => ({
+vi.mock('../api/planning.js', () => ({
   milestones: {
         getAll: vi.fn(),
       },
@@ -983,24 +983,6 @@ describe('itemDetailStore optional item data', () => {
 
     expect(firstSignal.aborted).toBe(true);
     expect(itemDetailStore.timeWorklogs).toEqual([{ id: 200, item_id: 99, duration_minutes: 60 }]);
-  });
-
-  it('loads time-modal-only picker data once', async () => {
-    customerOrganisations.getAll.mockResolvedValue([{ id: 1 }]);
-    items.getAll.mockResolvedValue({ data: [{ id: 2 }] });
-    workspaces.getPage.mockResolvedValue(
-      { data: [{ id: 3 }], pagination: { total: 1 } }
-    );
-
-    await Promise.all([itemDetailStore.loadTimeModalData(), itemDetailStore.loadTimeModalData()]);
-    await itemDetailStore.loadTimeModalData();
-
-    expect(customerOrganisations.getAll).toHaveBeenCalledTimes(1);
-    expect(items.getAll).toHaveBeenCalledTimes(1);
-    expect(workspaces.getPage).toHaveBeenCalledTimes(1);
-    expect(itemDetailStore.customers).toEqual([{ id: 1 }]);
-    expect(itemDetailStore.workItems).toEqual([{ id: 2 }]);
-    expect(itemDetailStore.workspaces).toEqual([{ id: 3 }]);
   });
 
   it('single-flights diagram requests and caches the result', async () => {
