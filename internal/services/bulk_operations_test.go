@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"slices"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -426,6 +428,174 @@ func TestBulkOperationMetricsReportRollingLatencyAndPressure(t *testing.T) {
 	}
 	if stats.LatencyP95Milliseconds != 50 || stats.LatencyP99Milliseconds != 50 {
 		t.Fatalf("metrics latency = p95 %.3f p99 %.3f, want 50/50", stats.LatencyP95Milliseconds, stats.LatencyP99Milliseconds)
+	}
+}
+
+// TestBulkPatchItemsReplacesMilestoneSets covers the GH #447 milestone action:
+// milestone_ids in a bulk patch replaces each item's milestone set (join rows,
+// not scalar columns) per item, records a milestones history entry only for
+// items that actually changed, and leaves other items' sets intact so a
+// non-common milestone shared with only part of the selection survives.
+func TestBulkPatchItemsReplacesMilestoneSets(t *testing.T) {
+	fixture := seedBulkFixture(t, 3)
+	globalMilestone := bulkInsertID(t, fixture.db, `
+		INSERT INTO milestones (name, description, status, is_global)
+		VALUES ('Company goal', '', 'planning', 1)
+	`)
+	localMilestone := bulkInsertID(t, fixture.db, `
+		INSERT INTO milestones (name, description, status, is_global, workspace_id)
+		VALUES ('Team release', '', 'planning', 0, ?)
+	`, fixture.workspaceID)
+	// Pre-existing memberships: item0 holds a milestone not in the selection's
+	// common set; item1 holds none.
+	if _, err := fixture.db.ExecWrite(`INSERT INTO item_milestones (item_id, milestone_id) VALUES (?, ?)`, fixture.incompleteIDs[0], globalMilestone); err != nil {
+		t.Fatalf("seed shared milestone: %v", err)
+	}
+	if _, err := fixture.db.ExecWrite(`DELETE FROM item_history WHERE item_id IN (?, ?, ?)`, fixture.incompleteIDs[0], fixture.incompleteIDs[1], fixture.incompleteIDs[2]); err != nil {
+		t.Fatalf("clear creation history: %v", err)
+	}
+
+	result, err := NewItemUpdateService(fixture.db).BulkPatchItems(context.Background(), BulkPatchItemsRequest{
+		Patches: []BulkItemPatch{
+			{ItemID: fixture.incompleteIDs[0], Fields: map[string]any{"milestone_ids": []int{localMilestone, globalMilestone}}},
+			{ItemID: fixture.incompleteIDs[1], Fields: map[string]any{"milestone_ids": []int{localMilestone}}},
+		},
+		UserID:             fixture.userID,
+		AuthorizeWorkspace: func(int) (bool, error) { return true, nil },
+	})
+	if err != nil {
+		t.Fatalf("BulkPatchItems: %v", err)
+	}
+	if result.UpdatedCount != 2 || result.UnchangedCount != 0 {
+		t.Fatalf("result = updated:%d unchanged:%d, want 2/0", result.UpdatedCount, result.UnchangedCount)
+	}
+
+	// Item 0 replaced its set; the seeded global membership did not survive as a
+	// leftover join row beyond the replacement.
+	for itemID, want := range map[int][]int{
+		fixture.incompleteIDs[0]: {globalMilestone, localMilestone},
+		fixture.incompleteIDs[1]: {localMilestone},
+		fixture.incompleteIDs[2]: {},
+	} {
+		var ids []int
+		rows, err := fixture.db.Query(`SELECT milestone_id FROM item_milestones WHERE item_id = ? ORDER BY milestone_id`, itemID)
+		if err != nil {
+			t.Fatalf("load milestones for item %d: %v", itemID, err)
+		}
+		for rows.Next() {
+			var id int
+			if err := rows.Scan(&id); err != nil {
+				t.Fatalf("scan milestone id: %v", err)
+			}
+			ids = append(ids, id)
+		}
+		if err := rows.Close(); err != nil {
+			t.Fatalf("close milestone rows: %v", err)
+		}
+		if !slices.Equal(ids, want) {
+			t.Fatalf("item %d milestones = %v, want %v", itemID, ids, want)
+		}
+	}
+
+	// History: each changed item gains one milestones row, old and new set as CSV.
+	var oldValue, newValue string
+	if err := fixture.db.QueryRow(
+		`SELECT COALESCE(old_value, ''), COALESCE(new_value, '') FROM item_history WHERE item_id = ? AND field_name = 'milestones'`,
+		fixture.incompleteIDs[0],
+	).Scan(&oldValue, &newValue); err != nil {
+		t.Fatalf("load item 0 history: %v", err)
+	}
+	if oldValue != strconv.Itoa(globalMilestone) || newValue != strconv.Itoa(globalMilestone)+","+strconv.Itoa(localMilestone) {
+		t.Fatalf("item 0 milestones history = %q -> %q, want global -> global,local", oldValue, newValue)
+	}
+	var historyRows int
+	if err := fixture.db.QueryRow(
+		`SELECT COUNT(*) FROM item_history WHERE item_id = ? AND field_name = 'milestones'`, fixture.incompleteIDs[1],
+	).Scan(&historyRows); err != nil {
+		t.Fatalf("count item 1 history: %v", err)
+	}
+	if historyRows != 1 {
+		t.Fatalf("item 1 milestones history rows = %d, want 1", historyRows)
+	}
+	if err := fixture.db.QueryRow(
+		`SELECT COUNT(*) FROM item_history WHERE item_id = ? AND field_name = 'milestones'`, fixture.incompleteIDs[2],
+	).Scan(&historyRows); err != nil {
+		t.Fatalf("count item 2 history: %v", err)
+	}
+	if historyRows != 0 {
+		t.Fatalf("item 2 milestones history rows = %d, want 0 (untouched item)", historyRows)
+	}
+}
+
+// Re-applying a selection's current milestone set is a no-op per item: no new
+// history row, no SQL churn beyond the ownership lookup, and an unchanged
+// count on the batch.
+func TestBulkPatchItemsMilestoneSetIdempotent(t *testing.T) {
+	fixture := seedBulkFixture(t, 2)
+	milestoneID := bulkInsertID(t, fixture.db, `
+		INSERT INTO milestones (name, description, status, is_global)
+		VALUES ('Company goal', '', 'planning', 1)
+	`)
+	if _, err := fixture.db.ExecWrite(`INSERT INTO item_milestones (item_id, milestone_id) VALUES (?, ?)`, fixture.incompleteIDs[0], milestoneID); err != nil {
+		t.Fatalf("seed milestone: %v", err)
+	}
+	if _, err := fixture.db.ExecWrite(`DELETE FROM item_history`); err != nil {
+		t.Fatalf("clear creation history: %v", err)
+	}
+
+	if _, err := NewItemUpdateService(fixture.db).BulkPatchItems(context.Background(), BulkPatchItemsRequest{
+		Patches: []BulkItemPatch{
+			{ItemID: fixture.incompleteIDs[0], Fields: map[string]any{"milestone_ids": []int{milestoneID}}},
+		},
+		UserID:             fixture.userID,
+		AuthorizeWorkspace: func(int) (bool, error) { return true, nil },
+	}); err != nil {
+		t.Fatalf("BulkPatchItems: %v", err)
+	}
+	// The set matches, so no history entry and no milestone join write happens;
+	// the batch still reports the item as patched (the scalar path is a no-op
+	// write, same as a repeated scalar field).
+	var history int
+	if err := fixture.db.QueryRow(`SELECT COUNT(*) FROM item_history WHERE field_name = 'milestones'`).Scan(&history); err != nil {
+		t.Fatalf("count milestones history: %v", err)
+	}
+	if history != 0 {
+		t.Fatalf("milestones history rows after no-op = %d, want 0", history)
+	}
+}
+
+// A milestone outside the item's workspace is rejected and the whole patch
+// batch rolls back: milestone validation is per item, like the single-item
+// PATCH contract.
+func TestBulkPatchItemsForeignWorkspaceMilestoneRollsBack(t *testing.T) {
+	fixture := seedBulkFixture(t, 2)
+	foreignWorkspace := bulkInsertID(t, fixture.db, `
+		INSERT INTO workspaces (name, key, description, active, is_personal)
+		VALUES ('Other', 'OTH', '', true, false)
+	`)
+	foreignMilestone := bulkInsertID(t, fixture.db, `
+		INSERT INTO milestones (name, description, status, is_global, workspace_id)
+		VALUES ('Other release', '', 'planning', 0, ?)
+	`, foreignWorkspace)
+
+	_, err := NewItemUpdateService(fixture.db).BulkPatchItems(context.Background(), BulkPatchItemsRequest{
+		Patches: []BulkItemPatch{
+			{ItemID: fixture.incompleteIDs[0], Fields: map[string]any{"title": "Allowed title"}},
+			{ItemID: fixture.incompleteIDs[1], Fields: map[string]any{"milestone_ids": []int{foreignMilestone}}},
+		},
+		UserID:             fixture.userID,
+		AuthorizeWorkspace: func(int) (bool, error) { return true, nil },
+	})
+	if err == nil || !strings.Contains(err.Error(), "Milestone") {
+		t.Fatalf("error = %v, want milestone validation failure", err)
+	}
+
+	var titled int
+	if err := fixture.db.QueryRow(`SELECT COUNT(*) FROM items WHERE title = 'Allowed title'`).Scan(&titled); err != nil {
+		t.Fatalf("count titled items: %v", err)
+	}
+	if titled != 0 {
+		t.Fatalf("rollback left %d retitled item(s)", titled)
 	}
 }
 

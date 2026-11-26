@@ -21,17 +21,10 @@ func TestProcessorFindOrCreateRecordsEmailIntakeProvenance(t *testing.T) {
 
 	ctx := context.Background()
 
-	var channelID int64
-	if err := db.QueryRowContext(ctx,
-		`INSERT INTO channels (name, type, direction, status) VALUES ('intake', 'email', 'inbound', 'enabled') RETURNING id`,
-	).Scan(&channelID); err != nil {
-		t.Fatalf("seed channel: %v", err)
-	}
-
 	processor := NewProcessor(db, blobstore.NewLocal(t.TempDir()))
 
 	customerID, err := processor.findOrCreatePortalCustomer(ctx,
-		"spamsender@test.local", "spam sender", int(channelID), &models.ChannelConfig{})
+		"spamsender@test.local", "spam sender")
 	if err != nil {
 		t.Fatalf("find or create: %v", err)
 	}
@@ -48,7 +41,7 @@ func TestProcessorFindOrCreateRecordsEmailIntakeProvenance(t *testing.T) {
 
 	// A known sender is found, not recreated — provenance stays as it was.
 	againID, err := processor.findOrCreatePortalCustomer(ctx,
-		"spamsender@test.local", "spam sender", int(channelID), &models.ChannelConfig{})
+		"spamsender@test.local", "spam sender")
 	if err != nil {
 		t.Fatalf("second find or create: %v", err)
 	}

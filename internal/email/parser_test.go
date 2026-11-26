@@ -54,3 +54,46 @@ func TestDecodeHeaderWordSupportsLegacyCharsets(t *testing.T) {
 		t.Fatalf("decoded windows-1252 header = %q", got)
 	}
 }
+
+// A screenshot pasted into a mail client arrives as a MIME image part with no
+// filename. It must be kept as a generated attachment (image-N with the media
+// type's extension), while a nameless non-image part is still dropped.
+func TestParserUnnamedInlineImageKeptWithGeneratedName(t *testing.T) {
+	raw := []byte("From: customer@example.com\r\n" +
+		"To: intake@example.com\r\n" +
+		"Subject: Screenshot\r\n" +
+		"Message-ID: <inline-shot@example.com>\r\n" +
+		"MIME-Version: 1.0\r\n" +
+		"Content-Type: multipart/mixed; boundary=MIMEBOUND\r\n\r\n" +
+		"--MIMEBOUND\r\n" +
+		"Content-Type: text/plain; charset=UTF-8\r\n\r\n" +
+		"See the attached screenshot.\r\n" +
+		"--MIMEBOUND\r\n" +
+		"Content-Type: image/png\r\n" +
+		"Content-Disposition: inline\r\n" +
+		"Content-Transfer-Encoding: base64\r\n\r\n" +
+		"aGVsbG8=\r\n" +
+		"--MIMEBOUND\r\n" +
+		"Content-Type: application/octet-stream\r\n\r\n" +
+		"nameless non-image\r\n" +
+		"--MIMEBOUND--\r\n")
+
+	parsed := NewParser().Parse(&FetchedMessage{UID: 1, Raw: raw})
+	var names []string
+	for _, attachment := range parsed.Attachments {
+		names = append(names, attachment.Filename)
+	}
+	if len(parsed.Attachments) != 1 {
+		t.Fatalf("attachments = %v, want exactly the named inline image", names)
+	}
+	kept := parsed.Attachments[0]
+	if kept.Filename != "image-1.png" {
+		t.Fatalf("generated filename = %q, want \"image-1.png\"", kept.Filename)
+	}
+	if kept.ContentType != "image/png" {
+		t.Fatalf("content type = %q, want image/png", kept.ContentType)
+	}
+	if string(kept.Data) != "hello" {
+		t.Fatalf("data = %q, want decoded \"hello\"", kept.Data)
+	}
+}

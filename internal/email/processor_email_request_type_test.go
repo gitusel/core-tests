@@ -304,3 +304,96 @@ func TestProcessor_PortalIntake_RoutesByIntakeItemType(t *testing.T) {
 		t.Errorf("request type item type = %d, want unchanged %d", requestTypeItemTypeID, defaultItemTypeID)
 	}
 }
+
+// Fresh mail from a sender a portal policy admits opens the request as that
+// portal customer instead of an unverified contact: the sender is resolved to
+// (or created as) a portal customer with email-intake provenance, granted
+// access to the intake channel and the connected portal, and the item carries
+// creator_portal_customer_id. The matching ProcessingResult reports the same
+// customer so the intake receipt goes to the real requester.
+func TestProcessor_PortalIntake_FreshMailOwnsItemAsPortalCustomer(t *testing.T) {
+	env := setupPortalIntakeEnv(t)
+	ctx := context.Background()
+
+	msg := newTestEmail("<portal-owner-1@example.com>", "Broken window", "The window is broken.")
+	result, err := env.processor.ProcessEmail(ctx, msg, env.emailChannelID, 0, env.config)
+	if err != nil {
+		t.Fatalf("ProcessEmail: %v", err)
+	}
+	if result.Action != email.ActionItemCreated || result.CustomerID == nil {
+		t.Fatalf("result = %s customer=%v, want item_created with a customer", result.Action, result.CustomerID)
+	}
+
+	creatorID := int(*result.CustomerID)
+	var contactEmail, createdVia string
+	if err := env.db.QueryRow(
+		`SELECT creator_portal_customer_id, COALESCE(contact_email, '') FROM items WHERE id = ?`, *result.ItemID,
+	).Scan(&creatorID, &contactEmail); err != nil {
+		t.Fatalf("load item: %v", err)
+	}
+	if creatorID != int(*result.CustomerID) {
+		t.Errorf("item creator = %d, want result customer %d", creatorID, *result.CustomerID)
+	}
+	if contactEmail != "" {
+		t.Errorf("contact_email = %q, want empty (creator is the attributed customer)", contactEmail)
+	}
+
+	// The customer carries email-intake provenance (WI-1553) and channel access
+	// to both the intake channel and the connected portal.
+	if err := env.db.QueryRow(
+		`SELECT created_via FROM portal_customers WHERE id = ?`, creatorID,
+	).Scan(&createdVia); err != nil {
+		t.Fatalf("load customer: %v", err)
+	}
+	if createdVia != models.CustomerCreatedViaEmailIntake {
+		t.Errorf("created_via = %q, want %q", createdVia, models.CustomerCreatedViaEmailIntake)
+	}
+	for _, channelID := range []int{env.emailChannelID, env.portalChannelID} {
+		var granted int
+		if err := env.db.QueryRow(
+			`SELECT COUNT(*) FROM portal_customer_channels WHERE portal_customer_id = ? AND channel_id = ?`,
+			creatorID, channelID,
+		).Scan(&granted); err != nil {
+			t.Fatalf("count channel access: %v", err)
+		}
+		if granted != 1 {
+			t.Errorf("channel %d access rows = %d, want 1", channelID, granted)
+		}
+	}
+}
+
+// A portal with a manual registration mode or a closed domain list must not
+// auto-admit an email sender (WI-2365): the request still opens, but as an
+// unverified contact with no portal owner.
+func TestProcessor_PortalIntake_ManualModeKeepsFreshMailUnowned(t *testing.T) {
+	env := setupPortalIntakeEnv(t)
+	ctx := context.Background()
+
+	manualCfg, _ := json.Marshal(models.ChannelConfig{
+		PortalSlug:             "support",
+		PortalWorkspaceIDs:     []int{env.workspaceID},
+		PortalRegistrationMode: "manual",
+	})
+	if _, err := env.db.ExecWrite(`UPDATE channels SET config = ? WHERE id = ?`, string(manualCfg), env.portalChannelID); err != nil {
+		t.Fatalf("set manual mode: %v", err)
+	}
+
+	msg := newTestEmail("<manual-1@example.com>", "New sender", "body")
+	result, err := env.processor.ProcessEmail(ctx, msg, env.emailChannelID, 0, env.config)
+	if err != nil {
+		t.Fatalf("ProcessEmail: %v", err)
+	}
+
+	if result.CustomerID != nil {
+		t.Fatalf("result customer = %d, want nil", *result.CustomerID)
+	}
+	var creatorID, contactEmail int
+	if err := env.db.QueryRow(
+		`SELECT COALESCE(creator_portal_customer_id, 0), contact_email IS NOT NULL FROM items WHERE id = ?`, *result.ItemID,
+	).Scan(&creatorID, &contactEmail); err != nil {
+		t.Fatalf("load item: %v", err)
+	}
+	if creatorID != 0 || contactEmail != 1 {
+		t.Fatalf("creator = %d with contact = %t, want 0/true (unverified sender)", creatorID, contactEmail != 0)
+	}
+}
