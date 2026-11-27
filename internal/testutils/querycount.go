@@ -88,3 +88,15 @@ func (c *QueryCountingDB) QueryRowContext(ctx context.Context, query string, arg
 	c.record(query)
 	return c.Database.QueryRowContext(ctx, query, args...)
 }
+
+// The known-read-only reader-pool routes count and record like the
+// statement-text paths above; the repository issues list counts through them.
+func (c *QueryCountingDB) QueryReadContext(ctx context.Context, query string, args ...any) (*sql.Rows, error) {
+	c.record(query)
+	return c.Database.QueryReadContext(ctx, query, args...)
+}
+
+func (c *QueryCountingDB) QueryRowReadContext(ctx context.Context, query string, args ...any) *sql.Row {
+	c.record(query)
+	return c.Database.QueryRowReadContext(ctx, query, args...)
+}

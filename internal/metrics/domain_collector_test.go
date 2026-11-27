@@ -54,6 +54,12 @@ func (brokenDatabase) QueryContext(ctx context.Context, query string, args ...an
 func (brokenDatabase) QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row {
 	panic("not implemented")
 }
+func (brokenDatabase) QueryReadContext(ctx context.Context, query string, args ...any) (*sql.Rows, error) {
+	return nil, errors.New("database unavailable")
+}
+func (brokenDatabase) QueryRowReadContext(ctx context.Context, query string, args ...any) *sql.Row {
+	panic("not implemented")
+}
 func (brokenDatabase) ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error) {
 	return nil, errors.New("database unavailable")
 }

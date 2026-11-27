@@ -29,6 +29,12 @@ func (db *blockingItemCountDB) QueryRowContext(ctx context.Context, query string
 	return db.Database.QueryRowContext(ctx, query, args...)
 }
 
+// QueryRowReadContext routes through the same gate: the count load moved to
+// the reader pool and the cache test pins single-flight behavior on it.
+func (db *blockingItemCountDB) QueryRowReadContext(ctx context.Context, query string, args ...any) *sql.Row {
+	return db.QueryRowContext(ctx, query, args...)
+}
+
 type observedDoneContext struct {
 	context.Context
 	observed chan struct{}

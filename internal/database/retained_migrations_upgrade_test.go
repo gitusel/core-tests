@@ -569,6 +569,7 @@ func TestCompactCatalogContainsExactlyRetainedMigrations(t *testing.T) {
 		"20261208_item_type_membership_authority",
 		"20261209_notification_setting_unique",
 		"20261210_email_reply_outbox_pending_index",
+		"20261211_collection_default_sort",
 	}
 
 	// A fork may carry migrations that upstream has not merged yet. They must

@@ -39,7 +39,7 @@ func TestImportJiraSavedFilterWithUnsupportedPredicateIsNonExecutable(t *testing
 	client := &fakeJiraFilterClient{filters: &jira.FilterSearchResult{Values: []jira.JiraFilter{{
 		ID:   "1",
 		Name: "My filter",
-		JQL:  `project = FLT AND assignee = currentUser()`,
+		JQL:  `project = FLT AND assignee = "jane.doe"`,
 	}}}}
 	h.importJiraSavedFilters(context.Background(), "job-jsm", "FLT", workspaceID, []string{"FLT"}, client, 0)
 
@@ -93,8 +93,8 @@ func TestImportJiraSavedFilterWithOnlyUnsupportedOrderingStaysExecutable(t *test
 	}}}}
 	h.importJiraSavedFilters(context.Background(), "job-jsm", "ORD", workspaceID, []string{"ORD"}, client, 0)
 
-	var qlQuery string
-	if err := db.QueryRow(`SELECT ql_query FROM collections WHERE workspace_id = ?`, workspaceID).Scan(&qlQuery); err != nil {
+	var qlQuery, defaultSort string
+	if err := db.QueryRow(`SELECT ql_query, COALESCE(default_sort, '') FROM collections WHERE workspace_id = ?`, workspaceID).Scan(&qlQuery, &defaultSort); err != nil {
 		t.Fatalf("load imported collection: %v", err)
 	}
 	if strings.Contains(qlQuery, "1 = 0") {
@@ -102,5 +102,13 @@ func TestImportJiraSavedFilterWithOnlyUnsupportedOrderingStaysExecutable(t *test
 	}
 	if !strings.Contains(qlQuery, `status = "Open"`) {
 		t.Fatalf("ql_query = %q, want the status predicate preserved", qlQuery)
+	}
+	// WI-2371: the validated ORDER BY vector persists on the collection
+	// instead of disabling the collection.
+	if defaultSort == "" {
+		t.Fatal("default_sort empty, want the persisted created_at desc vector")
+	}
+	if !strings.Contains(defaultSort, `"created_at"`) || !strings.Contains(defaultSort, `"desc"`) {
+		t.Fatalf("default_sort = %q, want a created_at desc term", defaultSort)
 	}
 }

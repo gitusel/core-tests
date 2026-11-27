@@ -83,8 +83,11 @@ func TestTranslateJQLReportsMembershipCompleteness(t *testing.T) {
 		wantComplete    bool
 		wantUnsupported bool
 	}{
-		{name: "unsupported predicate is incomplete", jql: `project = APP AND assignee = currentUser()`, wantComplete: false, wantUnsupported: true},
-		{name: "ordering only keeps membership complete", jql: `project = APP AND status = Open ORDER BY created DESC`, wantComplete: true, wantUnsupported: true},
+		// WI-2371 made assignee = currentUser() translatable, so it stays a
+		// complete selector; a named user remains unsupported and widens
+		// membership, forcing the incomplete flag.
+		{name: "unsupported predicate is incomplete", jql: `project = APP AND assignee = "jane.doe"`, wantComplete: false, wantUnsupported: true},
+		{name: "viewer predicate stays complete", jql: `project = APP AND assignee = currentUser()`, wantComplete: true, wantUnsupported: false},
 		{name: "fully supported stays complete", jql: `project = APP AND status = Open`, wantComplete: true, wantUnsupported: false},
 		{name: "empty jql stays complete", jql: ``, wantComplete: true, wantUnsupported: false},
 	}
