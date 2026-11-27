@@ -98,9 +98,13 @@ func TestSupportMetricsAggregateEndToEnd(t *testing.T) {
 	})
 	AssertStatusCode(t, transition, http.StatusOK)
 
-	from := time.Now().AddDate(0, 0, -7).Format("2006-01-02")
-	to := time.Now().Format("2006-01-02")
-	doc, resp := fetchSupportMetrics(t, server, fmt.Sprintf("?workspace_id=%d&from=%s&to=%s", workspaceID, from, to))
+	// The window derives from date-only strings while ticket timestamps are
+	// instants; a host in a UTC-negative zone (EST) pushes "today" into
+	// tomorrow in UTC and silently empties every bucket. Pin the report to
+	// UTC so the date window can never drift from the stored instants.
+	from := time.Now().UTC().AddDate(0, 0, -7).Format("2006-01-02")
+	to := time.Now().UTC().Format("2006-01-02")
+	doc, resp := fetchSupportMetrics(t, server, fmt.Sprintf("?timezone=UTC&workspace_id=%d&from=%s&to=%s", workspaceID, from, to))
 	AssertStatusCode(t, resp, http.StatusOK)
 
 	if doc.Summary.Created != 1 {
@@ -125,7 +129,7 @@ func TestSupportMetricsAggregateEndToEnd(t *testing.T) {
 		t.Errorf("queues empty for workspace scope, want the built-in queue catalog")
 	}
 
-	today := time.Now().Format("2006-01-02")
+	today := time.Now().UTC().Format("2006-01-02")
 	var todayBucket *struct {
 		BucketStart string `json:"bucket_start"`
 		Created     int64  `json:"created"`
@@ -148,7 +152,7 @@ func TestSupportMetricsAggregateEndToEnd(t *testing.T) {
 	}
 
 	// Segmentation by channel: the portal channel owns the ticket.
-	segDoc, segResp := fetchSupportMetrics(t, server, fmt.Sprintf("?workspace_id=%d&from=%s&to=%s&segment=channel", workspaceID, from, to))
+	segDoc, segResp := fetchSupportMetrics(t, server, fmt.Sprintf("?timezone=UTC&workspace_id=%d&from=%s&to=%s&segment=channel", workspaceID, from, to))
 	AssertStatusCode(t, segResp, http.StatusOK)
 	if len(segDoc.Segments) == 0 {
 		t.Fatalf("segments empty for segment=channel, want the portal channel")
@@ -175,7 +179,7 @@ func TestSupportMetricsAggregateEndToEnd(t *testing.T) {
 		} `json:"data"`
 	}
 	DecodeJSON(t, collectionResp, &collectionResult)
-	colDoc, colResp := fetchSupportMetrics(t, server, fmt.Sprintf("?collection_id=%d&from=%s&to=%s", collectionResult.Data.ID, from, to))
+	colDoc, colResp := fetchSupportMetrics(t, server, fmt.Sprintf("?timezone=UTC&collection_id=%d&from=%s&to=%s", collectionResult.Data.ID, from, to))
 	AssertStatusCode(t, colResp, http.StatusOK)
 	if colDoc.Summary.Created != 0 {
 		t.Errorf("collection-scoped created = %d, want 0 (resolved ticket filtered by QL)", colDoc.Summary.Created)
