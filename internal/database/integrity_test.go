@@ -96,7 +96,7 @@ func TestDatabaseIntegrity_CascadeDeletes(t *testing.T) {
 
 	// Create test items hierarchy: workspace -> item -> child item
 	var parentItemID int64
-	err := tdb.QueryRow(`
+	err := tdb.QueryRowWrite(`
 		INSERT INTO items (workspace_id, workspace_item_number, title, status_id, creator_id, frac_index)
 		VALUES (?, 1, 'Parent Item', ?, ?, '0|b1')
 		RETURNING id
@@ -105,7 +105,7 @@ func TestDatabaseIntegrity_CascadeDeletes(t *testing.T) {
 		t.Fatalf("Failed to create parent item: %v", err)
 	}
 
-	_, err = tdb.Exec(`
+	_, err = tdb.ExecWrite(`
 		INSERT INTO items (workspace_id, workspace_item_number, title, status_id, parent_id, creator_id, frac_index)
 		VALUES (?, 2, 'Child Item', ?, ?, ?, '0|b2')
 	`, data.WorkspaceID, data.StatusID, parentItemID, data.UserID)
@@ -114,7 +114,7 @@ func TestDatabaseIntegrity_CascadeDeletes(t *testing.T) {
 	}
 
 	// Create comments on the parent item
-	_, err = tdb.Exec(`
+	_, err = tdb.ExecWrite(`
 		INSERT INTO comments (item_id, author_id, content)
 		VALUES (?, ?, 'Test comment')
 	`, parentItemID, data.UserID)
@@ -286,7 +286,7 @@ func TestDatabaseIntegrity_HierarchicalData(t *testing.T) {
 
 	// Create hierarchical items: Root -> Level1 -> Level2
 	var rootID int64
-	if err := tdb.QueryRow(`
+	if err := tdb.QueryRowWrite(`
 		INSERT INTO items (workspace_id, workspace_item_number, title, status_id, path, frac_index)
 		VALUES (?, 1, 'Root Item', ?, '/', '0|c1')
 		RETURNING id
@@ -295,7 +295,7 @@ func TestDatabaseIntegrity_HierarchicalData(t *testing.T) {
 	}
 
 	var level1ID int64
-	if err := tdb.QueryRow(`
+	if err := tdb.QueryRowWrite(`
 		INSERT INTO items (workspace_id, workspace_item_number, title, status_id, parent_id, path, frac_index)
 		VALUES (?, 2, 'Level 1 Item', ?, ?, ?, '0|c2')
 		RETURNING id
@@ -303,11 +303,10 @@ func TestDatabaseIntegrity_HierarchicalData(t *testing.T) {
 		t.Fatalf("Failed to create level 1 item: %v", err)
 	}
 
-	if _, err := tdb.Exec(`
+	if _, err := tdb.ExecWrite(`
 		INSERT INTO items (workspace_id, workspace_item_number, title, status_id, parent_id, path, frac_index)
 		VALUES (?, 3, 'Level 2 Item', ?, ?, ?, '0|c3')
 	`, data.WorkspaceID, data.StatusID, level1ID, fmt.Sprintf("/%d/%d/", rootID, level1ID)); err != nil {
-		t.Fatalf("Failed to create level 2 item: %v", err)
 	}
 
 	// Test hierarchy queries

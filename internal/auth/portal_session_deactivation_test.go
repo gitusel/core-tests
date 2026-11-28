@@ -23,13 +23,13 @@ func TestPortalSessionManagerRefusesDeactivatedCustomers(t *testing.T) {
 	ctx := context.Background()
 
 	var customerID int64
-	if err := db.QueryRowContext(ctx,
+	if err := db.QueryRowWriteContext(ctx,
 		`INSERT INTO portal_customers (name, email) VALUES ('Deactivation Subject', 'deact@test.local') RETURNING id`,
 	).Scan(&customerID); err != nil {
 		t.Fatalf("seed customer: %v", err)
 	}
 	var channelID int64
-	if err := db.QueryRowContext(ctx,
+	if err := db.QueryRowWriteContext(ctx,
 		`INSERT INTO channels (name, type, direction, status) VALUES ('deact-portal', 'portal', 'inbound', 'enabled') RETURNING id`,
 	).Scan(&channelID); err != nil {
 		t.Fatalf("seed channel: %v", err)
@@ -48,7 +48,7 @@ func TestPortalSessionManagerRefusesDeactivatedCustomers(t *testing.T) {
 
 	// Deactivate out-of-band (as the admin endpoint would, minus the row
 	// deletes it also performs).
-	if _, err := db.ExecContext(ctx,
+	if _, err := db.ExecWriteContext(ctx,
 		`UPDATE portal_customers SET deactivated_at = ? WHERE id = ?`, time.Now(), customerID); err != nil {
 		t.Fatalf("deactivate customer: %v", err)
 	}

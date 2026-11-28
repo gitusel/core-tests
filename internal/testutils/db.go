@@ -89,7 +89,7 @@ func CreateFreshDB(t *testing.T, inMemory bool) *TestDB {
 func InsertID(t testing.TB, db database.Database, query string, args ...any) int {
 	t.Helper()
 	var id int
-	if err := db.QueryRow(strings.TrimSpace(query)+" RETURNING id", args...).Scan(&id); err != nil {
+	if err := db.QueryRowWrite(strings.TrimSpace(query)+" RETURNING id", args...).Scan(&id); err != nil {
 		t.Fatalf("insert fixture: %v\nquery: %s", err, query)
 	}
 	return id

@@ -15,14 +15,14 @@ func TestValidateCanonicalSchemaCheckpointRefusesMalformedRank(t *testing.T) {
 	defer tdb.Close()
 
 	var workspaceID int
-	if err := tdb.QueryRow(`
+	if err := tdb.QueryRowWrite(`
 		INSERT INTO workspaces (name, key, active, is_personal)
 		VALUES ('Malformed checkpoint rank', 'MCR', true, false)
 		RETURNING id`).Scan(&workspaceID); err != nil {
 		t.Fatalf("create workspace: %v", err)
 	}
 	// Direct SQL creates corruption that the production API intentionally rejects.
-	if _, err := tdb.Exec(`
+	if _, err := tdb.ExecWrite(`
 		INSERT INTO items (workspace_id, workspace_item_number, title, frac_index)
 		VALUES (?, 1, 'malformed rank', 'legacy-rank')`, workspaceID); err != nil {
 		t.Fatalf("insert malformed rank fixture: %v", err)

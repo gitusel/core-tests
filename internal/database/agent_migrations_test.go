@@ -20,16 +20,16 @@ func TestMigration_AgentRuns_SchemaSanity(t *testing.T) {
 		t.Fatalf("initialize fresh db: %v", err)
 	}
 
-	if _, err := db.Exec(`INSERT INTO workspaces(id, name, key, active) VALUES (1, 'ws', 'WS', TRUE)`); err != nil {
+	if _, err := db.ExecWrite(`INSERT INTO workspaces(id, name, key, active) VALUES (1, 'ws', 'WS', TRUE)`); err != nil {
 		t.Fatalf("seed workspace: %v", err)
 	}
 
 	var runID int
-	if err := db.QueryRow(`INSERT INTO agent_runs(workspace_id, item_id) VALUES (1, NULL) RETURNING id`).Scan(&runID); err != nil {
+	if err := db.QueryRowWrite(`INSERT INTO agent_runs(workspace_id, item_id) VALUES (1, NULL) RETURNING id`).Scan(&runID); err != nil {
 		t.Fatalf("insert agent_run: %v", err)
 	}
 
-	if _, err := db.Exec(`
+	if _, err := db.ExecWrite(`
 		UPDATE agent_runs
 		SET job_kind = 'standard_agent',
 		    acting_user_id = 31,
@@ -62,7 +62,7 @@ func TestMigration_AgentRuns_SchemaSanity(t *testing.T) {
 			jobKind, actingID, rootID, immediateID, parentID, depth, profileVersion, snapshot)
 	}
 
-	if _, err := db.Exec(
+	if _, err := db.ExecWrite(
 		`INSERT INTO agent_run_events(run_id, type, payload_json) VALUES (?, 'lifecycle', '{"phase":"queued"}')`,
 		runID,
 	); err != nil {
@@ -73,14 +73,14 @@ func TestMigration_AgentRuns_SchemaSanity(t *testing.T) {
 	}
 
 	// Status CHECK rejects bogus values.
-	if _, err := db.Exec(
+	if _, err := db.ExecWrite(
 		`INSERT INTO agent_runs(workspace_id, status) VALUES (1, 'in_orbit')`,
 	); err == nil {
 		t.Fatal("expected CHECK violation on bogus status, got nil")
 	}
 
 	// ON DELETE CASCADE cleans up events.
-	if _, err := db.Exec(`DELETE FROM agent_runs WHERE id = ?`, runID); err != nil {
+	if _, err := db.ExecWrite(`DELETE FROM agent_runs WHERE id = ?`, runID); err != nil {
 		t.Fatalf("delete agent_run: %v", err)
 	}
 	if n := countRows(t, db, fmt.Sprintf("SELECT COUNT(*) FROM agent_run_events WHERE run_id=%d", runID)); n != 0 {
@@ -98,10 +98,10 @@ func TestMigration_AgentConversations_SchemaSanity(t *testing.T) {
 	if err := db.Initialize(); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Exec(`INSERT INTO workspaces(id, name, key, active) VALUES (1, 'ws', 'WS', TRUE)`); err != nil {
+	if _, err := db.ExecWrite(`INSERT INTO workspaces(id, name, key, active) VALUES (1, 'ws', 'WS', TRUE)`); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Exec(`
+	if _, err := db.ExecWrite(`
 		INSERT INTO users(id, email, username, first_name, last_name, is_agent)
 		VALUES (10, 'human@example.test', 'human', 'Human', '', false),
 		       (11, 'agent@example.test', 'agent', 'Agent', '', true)
@@ -109,13 +109,13 @@ func TestMigration_AgentConversations_SchemaSanity(t *testing.T) {
 		t.Fatal(err)
 	}
 	var generalID int
-	if err := db.QueryRow(`
+	if err := db.QueryRowWrite(`
 		INSERT INTO agent_sessions(session_type, owner_user_id, title)
 		VALUES ('general', 10, 'General') RETURNING id
 	`).Scan(&generalID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Exec(`
+	if _, err := db.ExecWrite(`
 		INSERT INTO agent_session_participants(session_id, user_id, participant_role)
 		VALUES (?, 10, 'human')
 	`, generalID); err != nil {

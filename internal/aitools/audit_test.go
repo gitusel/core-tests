@@ -23,7 +23,7 @@ func newAuditTestDB(t *testing.T, fullName string) (database.Database, int) {
 	}
 	db := tdb.DB
 	var uid int64
-	err := db.QueryRow(`
+	err := db.QueryRowWrite(`
 		INSERT INTO users (username, email, first_name, last_name, password_hash, created_at, updated_at)
 		VALUES (?, ?, ?, '', '', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) RETURNING id
 	`, fullName, fullName+"@example.test", fullName).Scan(&uid)
@@ -39,7 +39,7 @@ func newAuditTestEnv(t *testing.T, fullName, source string) (*Env, int) {
 	t.Helper()
 	db, userID := newAuditTestDB(t, fullName)
 	var workspaceID int
-	if err := db.QueryRow(`
+	if err := db.QueryRowWrite(`
 		INSERT INTO workspaces (name, key, active) VALUES (?, ?, true) RETURNING id
 	`, fullName+" workspace", "AUD").Scan(&workspaceID); err != nil {
 		t.Fatalf("insert workspace: %v", err)

@@ -69,6 +69,18 @@ func (brokenDatabase) ExecWrite(query string, args ...any) (sql.Result, error) {
 func (brokenDatabase) ExecWriteContext(ctx context.Context, query string, args ...any) (sql.Result, error) {
 	return nil, errors.New("database unavailable")
 }
+func (brokenDatabase) QueryRowWrite(query string, args ...any) *sql.Row {
+	panic("not implemented")
+}
+func (brokenDatabase) QueryRowWriteContext(ctx context.Context, query string, args ...any) *sql.Row {
+	panic("not implemented")
+}
+func (brokenDatabase) QueryWrite(query string, args ...any) (*sql.Rows, error) {
+	return nil, errors.New("database unavailable")
+}
+func (brokenDatabase) QueryWriteContext(ctx context.Context, query string, args ...any) (*sql.Rows, error) {
+	return nil, errors.New("database unavailable")
+}
 func (brokenDatabase) Begin() (database.Tx, error) { return nil, errors.New("database unavailable") }
 func (brokenDatabase) BeginTx(ctx context.Context, opts *sql.TxOptions) (database.Tx, error) {
 	return nil, errors.New("database unavailable")

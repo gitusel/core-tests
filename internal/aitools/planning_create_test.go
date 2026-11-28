@@ -20,7 +20,7 @@ func newPlanningToolTestEnv(t *testing.T) (*Env, int) {
 	db := tdb.GetDatabase()
 
 	var workspaceID int
-	if err := db.QueryRow(`
+	if err := db.QueryRowWrite(`
 		INSERT INTO workspaces (name, key, active)
 		VALUES ('Planning tools', 'PLAN', true)
 		RETURNING id

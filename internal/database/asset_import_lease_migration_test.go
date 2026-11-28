@@ -79,10 +79,10 @@ func TestAssetSetPortalAccessCascadesOnSetDeletion(t *testing.T) {
 	db := tdb.GetDatabase()
 
 	var userID, setID int
-	if err := db.QueryRow("INSERT INTO users (email, username, first_name, last_name) VALUES ('portal-access-cascade@example.test', 'portal-access-cascade', 'Portal', 'Cascade') RETURNING id").Scan(&userID); err != nil {
+	if err := db.QueryRowWrite("INSERT INTO users (email, username, first_name, last_name) VALUES ('portal-access-cascade@example.test', 'portal-access-cascade', 'Portal', 'Cascade') RETURNING id").Scan(&userID); err != nil {
 		t.Fatalf("insert user: %v", err)
 	}
-	if err := db.QueryRow("INSERT INTO asset_management_sets (name, created_by) VALUES ('Cascade set', ?) RETURNING id", userID).Scan(&setID); err != nil {
+	if err := db.QueryRowWrite("INSERT INTO asset_management_sets (name, created_by) VALUES ('Cascade set', ?) RETURNING id", userID).Scan(&setID); err != nil {
 		t.Fatalf("insert set: %v", err)
 	}
 	if _, err := db.ExecWrite("INSERT INTO asset_set_portal_access (set_id, granted_by) VALUES (?, ?)", setID, userID); err != nil {

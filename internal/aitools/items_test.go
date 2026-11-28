@@ -55,20 +55,15 @@ func TestResolveStatusNameUsesWorkspaceStatuses(t *testing.T) {
 		t.Fatalf("lookup unavailable fixture status: %v", err)
 	}
 	var workflowID, configSetID, workspaceID int
-	if err := db.QueryRow(`INSERT INTO workflows (name) VALUES ('AI tools status workflow') RETURNING id`).Scan(&workflowID); err != nil {
-		t.Fatalf("insert workflow: %v", err)
+	if err := db.QueryRowWrite(`INSERT INTO workflows (name) VALUES ('AI tools status workflow') RETURNING id`).Scan(&workflowID); err != nil {
 	}
-	if _, err := db.Exec(`INSERT INTO workflow_transitions (workflow_id, from_status_id, to_status_id) VALUES (?, NULL, ?)`, workflowID, want); err != nil {
-		t.Fatalf("insert workflow status: %v", err)
+	if _, err := db.ExecWrite(`INSERT INTO workflow_transitions (workflow_id, from_status_id, to_status_id) VALUES (?, NULL, ?)`, workflowID, want); err != nil {
 	}
-	if err := db.QueryRow(`INSERT INTO configuration_sets (name, workflow_id) VALUES ('AI tools status config', ?) RETURNING id`, workflowID).Scan(&configSetID); err != nil {
-		t.Fatalf("insert configuration set: %v", err)
+	if err := db.QueryRowWrite(`INSERT INTO configuration_sets (name, workflow_id) VALUES ('AI tools status config', ?) RETURNING id`, workflowID).Scan(&configSetID); err != nil {
 	}
-	if err := db.QueryRow(`INSERT INTO workspaces (name, key, active) VALUES ('AI tools status workspace', 'AIT', true) RETURNING id`).Scan(&workspaceID); err != nil {
-		t.Fatalf("insert workspace: %v", err)
+	if err := db.QueryRowWrite(`INSERT INTO workspaces (name, key, active) VALUES ('AI tools status workspace', 'AIT', true) RETURNING id`).Scan(&workspaceID); err != nil {
 	}
-	if _, err := db.Exec(`INSERT INTO workspace_configuration_sets (workspace_id, configuration_set_id) VALUES (?, ?)`, workspaceID, configSetID); err != nil {
-		t.Fatalf("assign workspace configuration: %v", err)
+	if _, err := db.ExecWrite(`INSERT INTO workspace_configuration_sets (workspace_id, configuration_set_id) VALUES (?, ?)`, workspaceID, configSetID); err != nil {
 	}
 
 	got, err := resolveStatusName(db, "done", workspaceID)

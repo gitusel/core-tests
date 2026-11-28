@@ -21,7 +21,7 @@ func TestDeferredSQLiteTextAndDateIndexesMatchQueryExpressions(t *testing.T) {
 
 	for _, fieldType := range []string{"text", "date"} {
 		var fieldID int
-		if err := db.QueryRow(`
+		if err := db.QueryRowWrite(`
 			INSERT INTO custom_field_definitions (name, field_type)
 			VALUES (?, ?) RETURNING id
 		`, "Indexed "+fieldType, fieldType).Scan(&fieldID); err != nil {
